@@ -1,0 +1,34 @@
+function mount(component, target, hydrate = true): void {
+    const props = getProps(document.getElementById("__aviator_props"))
+
+    if (target != null) {
+        target.innerHTML = ""
+    }
+    new component({
+        target: target,
+        props: props,
+        hydrate: true,
+    })
+}
+
+function getProps(node: HTMLElement | null) {
+    if (!node || !node.textContent) {
+        return {}
+    }
+    try {
+        return JSON.parse(node.textContent)
+    } catch (err) {
+        return {}
+    }
+}
+
+
+import {{$.WrappedUniqueName}} from "{{$.WrappedUniqueName}}.svelte"
+
+
+// Mount the view
+export default mount(
+    {{$.WrappedUniqueName}},
+    document.getElementById("__aviator_root"),
+    true,
+)

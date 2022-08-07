@@ -207,7 +207,11 @@ type ssrData struct {
 	Lang string
 }
 
-func (a *Aviator) Render(ctx context.Context, viewPath string, props interface{}) (string, error) {
+func (a *Aviator) Render(
+	ctx context.Context,
+	viewPath string,
+	props interface{},
+) (string, error) {
 	a.viewLock.RLock()
 	view := a.viewManager.ViewByRelPath(viewPath)
 	a.viewLock.RUnlock()
@@ -215,6 +219,9 @@ func (a *Aviator) Render(ctx context.Context, viewPath string, props interface{}
 		return "", fmt.Errorf("view does not exist in path %s", viewPath)
 	}
 
+	//TODO: Create a sanitized copy of the props object where
+	// string objects are escaped to avoid script injections on the front end
+	// Should users be able to bypass escaping using tags?
 	jsonValue := "{}"
 	if props != nil {
 		jsonProps, err := json.Marshal(props)
@@ -224,8 +231,12 @@ func (a *Aviator) Render(ctx context.Context, viewPath string, props interface{}
 		jsonValue = string(jsonProps)
 	}
 
-	expr := fmt.Sprintf(`; __aviator__.render(%q, %s)`, view.WrappedUniqueName, jsonValue)
-	renderOutputStr, err := a.vm.Eval(ctx, "runtime_renderer.js", expr)
+	expr := fmt.Sprintf(
+		`; __aviator__.render(%q, %s)`,
+		view.WrappedUniqueName,
+		jsonValue,
+	)
+	renderOutputStr, err := a.vm.Eval(ctx, "runtime_renderer", expr)
 	if err != nil {
 		return renderOutputStr, err
 	}
@@ -238,7 +249,8 @@ func (a *Aviator) Render(ctx context.Context, viewPath string, props interface{}
 
 	ssrOutputData.Head = ssrOutputData.Head + "\n" +
 		a.createJSImportTags(view.JSImports) +
-		a.createCSSImportTag(view.CSSImports)
+		a.createCSSImportTag(view.CSSImports) +
+		a.createPropsScriptElem(jsonValue)
 
 	ssrOutputData.Lang = a.htmlLang
 	//cssPath := path.Join(a.assetListenPath, a._compiledCSSFileName)
@@ -253,9 +265,14 @@ func (a *Aviator) Render(ctx context.Context, viewPath string, props interface{}
 	return buf.String(), nil
 }
 
+func (a *Aviator) createPropsScriptElem(props string) string {
+	format := "<script id=\"__aviator_props\" type=\"text/template\" defer>%s</script>\n"
+	return fmt.Sprintf(format, props)
+}
+
 func (a *Aviator) createJSImportTags(assetImports []string) string {
 	output := ""
-	format := "<script src=\"%s\" defer></script>\n"
+	format := "<script type=\"module\" src=\"%s\" defer></script>\n"
 	for _, rawPath := range assetImports {
 		output += fmt.Sprintf(format, filepath.Join(a.staticAssetRoute, rawPath))
 	}

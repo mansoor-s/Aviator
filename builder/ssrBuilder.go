@@ -103,13 +103,13 @@ func (s *SSRBuilder) ssrPlugin() esbuild.Plugin {
 			epb.OnLoad(
 				esbuild.OnLoadOptions{Filter: `.*`, Namespace: "ssr"},
 				func(args esbuild.OnLoadArgs) (result esbuild.OnLoadResult, err error) {
-					buf := new(bytes.Buffer)
 					//this data is used to compile the .gotext template to get JS
 					viewData := map[string]interface{}{
 						"Views": viewList,
 					}
 
-					err = ssrGenerator.Execute(buf, viewData)
+					buf := bytes.Buffer{}
+					err = ssrGenerator.Execute(&buf, viewData)
 					if err != nil {
 						return result, err
 					}
@@ -147,7 +147,7 @@ func createLayoutWrappedView(view *View) string {
 	importStatement := fmt.Sprintf(wrappedImportStatementFmt, view.UniqueName, view.RelPath)
 	importStatements = append(importStatements, importStatement)
 
-	componentStr := `<` + view.UniqueName + `/>`
+	componentStr := `<svelte:component this={` + view.UniqueName + `}  {...($$props || {})}/>`
 
 	wrappedComponentStr := strings.Join(startTags, "") +
 		componentStr +

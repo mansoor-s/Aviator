@@ -1,7 +1,9 @@
 package builder
 
 import (
+	"bytes"
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	esbuild "github.com/evanw/esbuild/pkg/api"
@@ -11,7 +13,10 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"text/template"
 )
+
+const aviatorRuntimeTargetID = "__aviator_root"
 
 type BrowserImports struct {
 	JS  []string
@@ -39,12 +44,16 @@ func NewBrowserBuilder(
 	}
 }
 
+// The entrypoints are the virtual files created for all Components in the
+// browserRuntimePlugin func. This plugin will reference those virtual files
+// and will bundle and persist the outputs
+
 //BuildDev creates assets for embedding into the rendered view
-// It persists the assets into the output directory and adds the names
-// to the relevant view
+// It persists the assets into the output directory
 func (b *BrowserBuilder) BuildDev(ctx context.Context) error {
 	views := b.viewManager.AllViews()
 	viewsByEntryPoint := make(map[string]*View, len(views))
+	viewsByOutputName := make(map[string]*View, len(views))
 
 	var entryPoints []esbuild.EntryPoint
 
@@ -53,14 +62,15 @@ func (b *BrowserBuilder) BuildDev(ctx context.Context) error {
 		if view.IsLayout {
 			continue
 		}
-		entryPath := view.WrappedUniqueName + ".svelte"
+
+		entryPath := view.WrappedUniqueName + "_Runtime.svelte"
 		outputPrettyName := view.UniqueName + ".svelte"
 		entryPoints = append(entryPoints, esbuild.EntryPoint{
 			InputPath:  entryPath,
 			OutputPath: filepath.Join(b.outputDir, outputPrettyName),
 		})
-
-		viewsByEntryPoint[outputPrettyName] = view
+		viewsByOutputName[outputPrettyName] = view
+		viewsByEntryPoint[entryPath] = view
 	}
 
 	result := esbuild.Build(esbuild.BuildOptions{
@@ -76,18 +86,19 @@ func (b *BrowserBuilder) BuildDev(ctx context.Context) error {
 		Metafile:          false,
 		Bundle:            true,
 		Splitting:         true,
-		MinifyIdentifiers: true,
-		MinifySyntax:      true,
-		MinifyWhitespace:  true,
+		MinifyIdentifiers: false,
+		MinifySyntax:      false,
+		MinifyWhitespace:  false,
 		LogLevel:          esbuild.LogLevelInfo,
 		Plugins: append(
 			[]esbuild.Plugin{
+				b.browserRuntimePlugin(viewsByEntryPoint),
 				b.wrappedComponentsPlugin(),
 				b.svelteComponentsPlugin(),
 				b.npmJsPathPlugin(),
 			},
 		),
-		Write: false,
+		Write: true,
 	})
 	if len(result.Errors) > 0 {
 		msgs := esbuild.FormatMessages(result.Errors, esbuild.FormatMessagesOptions{
@@ -99,16 +110,16 @@ func (b *BrowserBuilder) BuildDev(ctx context.Context) error {
 	}
 
 	//delete all old generated files
-	err := utils.RemoveDirContents(b.outputDir)
-	if err != nil {
-		return err
-	}
+	//err := utils.RemoveDirContents(b.outputDir)
+	//if err != nil {
+	//	return err
+	//}
 
 	for _, file := range result.OutputFiles {
 		fileName := filepath.Base(file.Path)
 		extension := utils.FileExtension(fileName)
 		viewRefName := fileName[:len(fileName)-len(extension)-1]
-		view := viewsByEntryPoint[viewRefName]
+		view := viewsByOutputName[viewRefName]
 
 		//skip if no view is directly associated with this "chunk" file
 		if view != nil {
@@ -120,13 +131,55 @@ func (b *BrowserBuilder) BuildDev(ctx context.Context) error {
 		}
 
 		//save files to outputDir
-		err := os.WriteFile(filepath.Join(b.outputDir, fileName), file.Contents, 775)
-		if err != nil {
-			return err
-		}
+		//err := os.WriteFile(filepath.Join(b.outputDir, fileName), file.Contents, 775)
+		//if err != nil {
+		//	return err
+		//}
 	}
 
 	return nil
+}
+
+//go:embed browserHelperTemplate.gotext
+var browserTemplate string
+
+var browserGenerator = template.Must(template.New("browserTemplate").Parse(browserTemplate))
+
+//browserRuntimePlugin renders the browserTemplate for each component
+//The rendered content acts as the entrypoint that are used for the esbuild and
+//also imported by each of the view in the final HTML
+func (b *BrowserBuilder) browserRuntimePlugin(viewsByOutputName map[string]*View) esbuild.Plugin {
+	return esbuild.Plugin{
+		Name: "browserRuntimePlugin",
+		Setup: func(epb esbuild.PluginBuild) {
+			epb.OnResolve(
+				//__AviatorWrapped{UniqueName}_Runtime.svelte
+				esbuild.OnResolveOptions{Filter: `^__AviatorWrapped.*_Runtime\.svelte$`},
+				func(args esbuild.OnResolveArgs) (result esbuild.OnResolveResult, err error) {
+					result.Namespace = "browserRuntime"
+					result.Path = args.Path
+					return result, nil
+				},
+			)
+			epb.OnLoad(
+				esbuild.OnLoadOptions{Filter: `.*`, Namespace: "browserRuntime"},
+				func(args esbuild.OnLoadArgs) (result esbuild.OnLoadResult, err error) {
+					view := viewsByOutputName[args.Path]
+
+					buf := bytes.Buffer{}
+					err = browserGenerator.Execute(&buf, view)
+
+					contents := buf.String()
+
+					result.ResolveDir = b.workingDir
+					result.Contents = &contents
+					result.Loader = esbuild.LoaderTS
+					return result, nil
+				},
+			)
+		},
+	}
+
 }
 
 //wrappedComponentsPlugin creates a new virtual svelte component that
@@ -191,7 +244,7 @@ func (b *BrowserBuilder) wrappedComponentsPlugin() esbuild.Plugin {
 //svelteComponentsPlugin handles .svelte files both inside the project and node_modules
 func (b *BrowserBuilder) svelteComponentsPlugin() esbuild.Plugin {
 	return esbuild.Plugin{
-		Name: "svelte",
+		Name: "browserSvelte",
 		Setup: func(epb esbuild.PluginBuild) {
 			epb.OnResolve(
 				esbuild.OnResolveOptions{Filter: `^.*\.svelte$`},

@@ -1,23 +1,30 @@
 <script lang="ts">
 
-    import {  Breadcrumb, BreadcrumbItem, Button, Col, Row } from "sveltestrap/src";
+    import {  Modal, Breadcrumb, BreadcrumbItem, Button, Col, Row } from "sveltestrap/src";
+    let isOpen = false;
+    const toggle = () => (isOpen = !isOpen);
 
 
     import Donkey from "./donkey.svelte";
 
     export let Myprop;
+    console.log("Myprop value: " + Myprop);
 
     let count = 0;
 
     export function handleClick () {
-        alert("hello!");
-        // calling this function will trigger an
-        // update if the markup references `count`
         count = count + 1;
     }
 
-    console.log('Look for this text in your go STDOUT');
 </script>
+
+<h2>{@debug $$props}</h2>
+
+<Button color="primary" on:click={toggle}>Hello World!</Button>
+<Modal body {isOpen} {toggle} header="Open Modal!">
+    <p>I hope you like dialogs</p>
+</Modal>
+
 
 <Button on:click={handleClick}  color="primary" outline>Click Me! {count}</Button>
 
@@ -54,7 +61,7 @@
 
 
 <main>
-    <Donkey />
+    <h1><Donkey /></h1>
 </main>
 
 <style>
@@ -66,8 +73,7 @@
         margin: 0 auto;
     }
     h1 {
-        color: red !important;
-        color: #ff3e00;
+        color: green !important;
         text-transform: uppercase;
         font-size: 4em;
         font-weight: 100;
