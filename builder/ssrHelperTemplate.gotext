@@ -1,0 +1,47 @@
+{{- range $view := $.Views }}
+import {{$view.WrappedUniqueName}} from "{{$view.WrappedUniqueName}}.svelte"
+{{- end }}
+
+
+function renderHTML(input) {
+  return input.view.render({ props: input.props, context: input.context})
+}
+
+function createView(view) {
+  return {
+    name: view.name,
+    render: function({ props, slots, context }) {
+      var rendered = view.svelteComponent.render(props, context);
+      return {
+        head: rendered.head,
+        body: rendered.html,
+        pageCSS: rendered.css.code
+      }
+    }
+  };
+}
+
+
+const views = {}
+{{- range $view := $.Views }}
+  views["{{$view.WrappedUniqueName}}"] = createView({
+    name: "{{$view.WrappedUniqueName}}",
+    svelteComponent: {{$view.WrappedUniqueName}},
+    client: "/{{$.Client}}",
+  })
+{{- end }}
+
+// Render the view
+
+export function render(uniqueName, props, context) {
+  const view = views[uniqueName]
+  if (!view) {
+    return `view "${uniqueName}" not found`
+  }
+  return JSON.stringify(renderHTML({
+    context: context,
+    props: props,
+    uniqueName: uniqueName,
+    view: view,
+  }));
+}
