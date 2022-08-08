@@ -167,7 +167,9 @@ func wrappedComponentsPlugin(
 						return result, err
 					}
 
-					contents := compiledCode.JS
+					contents := compiledCode.JSCode +
+						`//# sourceMappingURL=` +
+						compiledCode.JSSourceMap
 					result.ResolveDir = workingDir
 					result.Contents = &contents
 					result.Loader = esbuild.LoaderJSX
@@ -221,7 +223,9 @@ func svelteComponentsPlugin(
 						return result, err
 					}
 
-					contents := compiledCode.JS
+					contents := compiledCode.JSCode +
+						`//# sourceMappingURL=` +
+						compiledCode.JSSourceMap
 					result.ResolveDir = workingDir
 					result.Contents = &contents
 					result.Loader = esbuild.LoaderJSX

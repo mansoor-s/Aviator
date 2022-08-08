@@ -9,6 +9,7 @@ import (
 	esbuild "github.com/evanw/esbuild/pkg/api"
 	"github.com/mansoor-s/aviator/js"
 	"github.com/mansoor-s/aviator/utils"
+	"os"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -85,6 +86,7 @@ func (b *BrowserBuilder) BuildDev(_ context.Context) error {
 		MinifyIdentifiers: false,
 		MinifySyntax:      false,
 		MinifyWhitespace:  false,
+		Sourcemap:         esbuild.SourceMapInline,
 		LogLevel:          esbuild.LogLevelInfo,
 		Plugins: append(
 			[]esbuild.Plugin{
@@ -94,7 +96,7 @@ func (b *BrowserBuilder) BuildDev(_ context.Context) error {
 				npmJsPathPlugin(b.workingDir),
 			},
 		),
-		Write: true,
+		Write: false,
 	})
 	if len(result.Errors) > 0 {
 		msgs := esbuild.FormatMessages(result.Errors, esbuild.FormatMessagesOptions{
@@ -127,10 +129,10 @@ func (b *BrowserBuilder) BuildDev(_ context.Context) error {
 		}
 
 		//save files to outputDir
-		//err := os.WriteFile(filepath.Join(b.outputDir, fileName), file.Contents, 775)
-		//if err != nil {
-		//	return err
-		//}
+		err := os.WriteFile(filepath.Join(b.outputDir, fileName), file.Contents, 775)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -180,9 +182,10 @@ func (b *BrowserBuilder) browserRuntimePlugin(viewsByOutputName map[string]*View
 
 func (b *BrowserBuilder) browserCompile(path string, code []byte) (*SvelteBuildOutput, error) {
 	expr := fmt.Sprintf(
-		`;__svelte__.compile({ "path": %q, "code": %q, "target": "dom", "dev": %t, "css": true })`,
+		`;__svelte__.compile({ "path": %q, "code": %q, "target": "dom", "dev": %t, "css": true, "enableSourcemap": %t })`,
 		path,
 		code,
+		true,
 		true,
 	)
 	result, err := b.vm.Eval(context.Background(), path, expr)

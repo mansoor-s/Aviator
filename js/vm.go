@@ -29,14 +29,6 @@ func NewV8VMPool(poolSize int, initScript string) (*v8VMPool, error) {
 		if err != nil {
 			return nil, err
 		}
-		/*if len(initScript) > 0 {
-			err := vm.InitializationScript(context.Background(), "__aviator_vm_init_script", initScript)
-
-			if err != nil {
-				return nil, err
-			}
-		}
-		*/
 
 		return vm, nil
 	}
@@ -65,8 +57,11 @@ func NewV8VMPool(poolSize int, initScript string) (*v8VMPool, error) {
 		"__aviator_vm_init_script",
 		initScript,
 	)
+	if err != nil {
+		return nil, newV8JSError(err)
+	}
 
-	return v8Pool, err
+	return v8Pool, nil
 }
 
 //InitializationScript runs an initialization script on all VM instances
@@ -87,7 +82,7 @@ func (p *v8VMPool) InitializationScript(ctx context.Context, path, script string
 		vm := res.Value().(*V8VM)
 		err := vm.InitializationScript(ctx, path, script)
 		if err != nil {
-			return err
+			return newV8JSError(err)
 		}
 	}
 
@@ -102,12 +97,17 @@ func (p *v8VMPool) Eval(ctx context.Context, path, expression string) (string, e
 	res, err := p.pool.Acquire(ctx)
 	defer res.Release()
 	if err != nil {
-		return "", err
+		return "", newV8JSError(err)
 	}
 
 	vm := res.Value().(*V8VM)
 
-	return vm.Eval(ctx, path, expression)
+	val, err := vm.Eval(ctx, path, expression)
+	if err != nil {
+		return "", newV8JSError(err)
+	}
+
+	return val, nil
 }
 
 func (p *v8VMPool) Close() {

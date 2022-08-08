@@ -1,18 +1,22 @@
 import { compile as compileSvelte } from "svelte/compiler"
 
+
 type Input = {
     code: string
     path: string
     target: "ssr" | "dom"
     dev: boolean
     css: boolean
+    enableSourcemap: boolean
 }
 
 // Capitalized for Go
 type Output =
     | {
-    JS: string
-    CSS: string
+    JSCode: any
+    CSSCode: any
+    JSSourceMap: string
+    CSSSourceMap: string
 }
     | {
     Error: {
@@ -25,7 +29,7 @@ type Output =
 
 // Compile svelte code
 export function compile(input: Input): string {
-    const { code, path, target, dev, css } = input
+    const { code, path, target, dev, css, enableSourcemap } = input
     const svelte = compileSvelte(code, {
         filename: path,
         generate: target,
@@ -33,9 +37,13 @@ export function compile(input: Input): string {
         format: "esm",
         dev: dev,
         css: css,
+        enableSourcemap: enableSourcemap,
     })
+
     return JSON.stringify({
-        CSS: svelte.css.code,
-        JS: svelte.js.code,
+        CSSCode: svelte.css.code,
+        JSCode: svelte.js.code,
+        CSSSourceMap: "", //svelte.css.map.toUrl(),
+        JSSourceMap: svelte.js.map.toUrl(),
     } as Output)
 }

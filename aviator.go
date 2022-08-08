@@ -26,10 +26,7 @@ var defaultHTMLTemplate string
 var defaultHTMLGenerator = template.Must(template.New("defaultHTML").Parse(defaultHTMLTemplate))
 
 //JSError provides a JS runtime agnostic error
-type JSError interface {
-	Error() string
-	ErrorStackTrace() string
-}
+type JSError = js.JSError
 
 func NewAviator(configs ...Option) *Aviator {
 	a := &Aviator{

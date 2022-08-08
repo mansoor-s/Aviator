@@ -2,6 +2,8 @@ package js
 
 import (
 	"context"
+	"errors"
+	"go.kuoruan.net/v8go-polyfills/base64"
 	"go.kuoruan.net/v8go-polyfills/console"
 	"go.kuoruan.net/v8go-polyfills/fetch"
 	"go.kuoruan.net/v8go-polyfills/url"
@@ -24,38 +26,57 @@ func (e v8Error) ErrorStackTrace() string {
 }
 
 func newV8VM() (*V8VM, error) {
-	v8Ctx := v8go.NewContext()
-	isolate := v8Ctx.Isolate()
+	var v8Ctx *v8go.Context
+
+	isolate := v8go.NewIsolate()
+	if isolate == nil {
+		return nil, errors.New("unable to create a new V8 isolate")
+	}
 
 	var err error
 	defer func() {
-		if err == nil {
-			return
+		if err != nil {
+			//clean up on error
+			isolate.TerminateExecution()
+			isolate.Dispose()
+			if v8Ctx != nil {
+				v8Ctx.Close()
+			}
 		}
-		//clean up on error
-		v8Ctx.Close()
-		isolate.TerminateExecution()
-		isolate.Dispose()
 	}()
 
 	//TODO: why is this needed?
 	global := v8go.NewObjectTemplate(isolate)
 
-	// Fetch support
-	if err := fetch.InjectTo(isolate, global); err != nil {
+	err = base64.InjectTo(isolate, global)
+	if err != nil {
 		return nil, err
 	}
 
-	// URL support
-	if err := url.InjectTo(v8Ctx); err != nil {
+	// Fetch support
+	err = fetch.InjectTo(isolate, global)
+	if err != nil {
 		return nil, err
 	}
+
+	v8Ctx = v8go.NewContext(isolate, global)
+	if v8Ctx == nil {
+		return nil, errors.New("unable to create a new V8 context")
+	}
+
+	// URL support
+	err = url.InjectTo(v8Ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// Console support
-	if err := console.InjectMultipleTo(v8Ctx,
+	err = console.InjectMultipleTo(v8Ctx,
 		console.NewConsole(console.WithOutput(os.Stderr), console.WithMethodName("error")),
 		console.NewConsole(console.WithOutput(os.Stderr), console.WithMethodName("warn")),
 		console.NewConsole(console.WithOutput(os.Stdout), console.WithMethodName("log")),
-	); err != nil {
+	)
+	if err != nil {
 		return nil, err
 	}
 

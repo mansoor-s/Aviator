@@ -45,11 +45,14 @@ var __svelte__ = (() => {
   };
   var window = {
     btoa: (data2) => {
-      return "";
+      return btoa(data2);
+    },
+    atob: (data2) => {
+      return atob(data2);
     }
   };
 
-  // node_modules/svelte/compiler.mjs
+  // ../node_modules/svelte/compiler.mjs
   var now = typeof process !== "undefined" && process.hrtime ? () => {
     const t = process.hrtime();
     return t[0] * 1e3 + t[1] / 1e6;
@@ -26956,18 +26959,21 @@ ${frame}`
 
   // compiler.ts
   function compile2(input) {
-    const { code, path, target, dev, css } = input;
+    const { code, path, target, dev, css, enableSourcemap } = input;
     const svelte = compile(code, {
       filename: path,
       generate: target,
       hydratable: true,
       format: "esm",
       dev,
-      css
+      css,
+      enableSourcemap
     });
     return JSON.stringify({
-      CSS: svelte.css.code,
-      JS: svelte.js.code
+      CSSCode: svelte.css.code,
+      JSCode: svelte.js.code,
+      CSSSourceMap: "",
+      JSSourceMap: svelte.js.map.toUrl()
     });
   }
   return __toCommonJS(compiler_exports);

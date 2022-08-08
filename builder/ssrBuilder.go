@@ -47,6 +47,7 @@ func (s *SSRBuilder) DevBuild(_ context.Context) (*CompiledResult, error) {
 		Bundle:        true,
 		Metafile:      true,
 		LogLevel:      esbuild.LogLevelInfo,
+		Sourcemap:     esbuild.SourceMapInline,
 		Plugins: []esbuild.Plugin{
 			s.ssrPlugin(),
 			wrappedComponentsPlugin(s.workingDir, s.viewManager, s.ssrCompile),
@@ -121,16 +122,20 @@ func (s *SSRBuilder) ssrPlugin() esbuild.Plugin {
 }
 
 type SvelteBuildOutput struct {
-	JS  string
-	CSS string
+	CSSCode string
+	JSCode  string
+
+	JSSourceMap  string
+	CSSSourceMap string
 }
 
 //ssrCompile compiles a compiled
 func (s *SSRBuilder) ssrCompile(path string, code []byte) (*SvelteBuildOutput, error) {
 	expr := fmt.Sprintf(
-		`;__svelte__.compile({ "path": %q, "code": %q, "target": "ssr", "dev": %t, "css": false })`,
+		`;__svelte__.compile({ "path": %q, "code": %q, "target": "ssr", "dev": %t, "css": false, "enableSourcemap": %t })`,
 		path,
 		code,
+		true,
 		true,
 	)
 	result, err := s.vm.Eval(context.Background(), path, expr)

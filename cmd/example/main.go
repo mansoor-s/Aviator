@@ -57,7 +57,7 @@ func main() {
 			errStr := ""
 			jsErr, ok := err.(aviator.JSError)
 			if ok {
-				errStr = jsErr.ErrorStackTrace()
+				errStr = jsErr.StackTrace()
 			} else {
 				errStr = err.Error()
 			}
@@ -78,7 +78,7 @@ func main() {
 			errStr := ""
 			jsErr, ok := err.(aviator.JSError)
 			if ok {
-				errStr = jsErr.ErrorStackTrace()
+				errStr = jsErr.StackTrace()
 			} else {
 				errStr = err.Error()
 			}
