@@ -3,7 +3,6 @@ package aviator
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -26,7 +25,7 @@ var defaultHTMLTemplate string
 var defaultHTMLGenerator = template.Must(template.New("defaultHTML").Parse(defaultHTMLTemplate))
 
 //JSError provides a JS runtime agnostic error
-type JSError = js.JSError
+//type JSError = js.JSError
 
 func NewAviator(configs ...Option) *Aviator {
 	a := &Aviator{
@@ -66,10 +65,22 @@ func (a *Aviator) Init() error {
 	}
 
 	//TODO: make this configurable
-	a.vm, err = js.NewV8VMPool(a.numVMs, svelteCompilerCode)
+	//a.vm, err = js.NewV8VMPool(a.numVMs, svelteCompilerCode)
+	a.vm, err = js.NewGojaVMPool(a.numVMs)
 	//some vm instance initializations might have succeeded. Clean up if possible
 	if err != nil {
-		a.vm.Close()
+		return err
+	}
+
+	/*_, err = a.vm.Eval(
+		"svelte_compiler_init.js",
+		svelteCompilerCode,
+	)*/
+	err = a.vm.InitializationScript(
+		"svelte_compiler_init.js",
+		svelteCompilerCode,
+	)
+	if err != nil {
 		return err
 	}
 
@@ -100,10 +111,13 @@ func (a *Aviator) startChangeWatcher() error {
 		for {
 			select {
 			case _, ok := <-watcher.Events:
+				var err error
 				if !ok {
 					return
 				}
-				err := a.rebuildViews()
+
+				err = a.rebuildViews()
+
 				if err != nil {
 					a.logger.Error(
 						fmt.Errorf("failed to rebuild views on FS change: %w", err).Error(),
@@ -138,7 +152,7 @@ func (a *Aviator) startChangeWatcher() error {
 	return nil
 }
 
-// rebuildViews destorys all views and rescans the views directory
+// rebuildViews destroys all View objects and rescans the views directory
 // to reconstruct the component tree.
 // It will then re-build all components
 func (a *Aviator) rebuildViews() error {
@@ -153,9 +167,9 @@ func (a *Aviator) rebuildViews() error {
 
 	a.viewManager = builder.NewViewManager(a.componentTree)
 
-	ssrBuilder := builder.NewSSRBuilder(a.vm, a.viewManager, a.viewsPath)
+	a.ssrBuilder = builder.NewSSRBuilder(a.vm, a.viewManager, a.viewsPath)
 
-	compiledSSRResult, err := ssrBuilder.DevBuild(context.Background())
+	compiledSSRResult, err := a.ssrBuilder.DevBuild(context.Background())
 	if err != nil {
 		//don't exit the update loop on esbuild errors
 		a.logger.Error("error building SSR: " + err.Error())
@@ -176,12 +190,16 @@ func (a *Aviator) rebuildViews() error {
 
 	a._devModeSSRCompiledJs = compiledSSRResult.JS
 	a._devModeSSRCompiledCSS = compiledSSRResult.CSS
-	cssHash := fmt.Sprintf("%x", sha256.Sum256(a._devModeSSRCompiledCSS))
-	a._compiledCSSFileName = "bundled_css_" + cssHash[:10] + ".css"
+	//cssHash := fmt.Sprintf("%x", sha256.Sum256(a._devModeSSRCompiledCSS))
+	//a._compiledCSSFileName = "bundled_css_" + cssHash[:10] + ".css"
 
-	err = a.vm.InitializationScript(
+	/*err = a.vm.InitializationScript(
 		context.Background(),
-		"aviator_virtual_router.js",
+		"aviator_ssr_router.js",
+		string(compiledSSRResult.JS),
+	)*/
+	_, err = a.vm.Eval(
+		"aviator_ssr_router.js",
 		string(compiledSSRResult.JS),
 	)
 	if err != nil {
@@ -209,9 +227,15 @@ func (a *Aviator) Render(
 	viewPath string,
 	props interface{},
 ) (string, error) {
-	a.viewLock.RLock()
-	view := a.viewManager.ViewByRelPath(viewPath)
-	a.viewLock.RUnlock()
+	var view *builder.View
+	if a.isDevMode {
+		a.viewLock.RLock()
+		defer a.viewLock.RUnlock()
+		view = a.viewManager.ViewByRelPath(viewPath)
+	} else {
+		view = a.viewManager.ViewByRelPath(viewPath)
+	}
+
 	if view == nil {
 		return "", fmt.Errorf("view does not exist in path %s", viewPath)
 	}
@@ -229,11 +253,11 @@ func (a *Aviator) Render(
 	}
 
 	expr := fmt.Sprintf(
-		`; __aviator__.render(%q, %s)`,
+		"; __aviator__.render(%q, %s, {})",
 		view.WrappedUniqueName,
 		jsonValue,
 	)
-	renderOutputStr, err := a.vm.Eval(ctx, "runtime_renderer", expr)
+	renderOutputStr, err := a.vm.Eval("runtime_renderer", expr)
 	if err != nil {
 		return renderOutputStr, err
 	}
@@ -288,7 +312,7 @@ func (a *Aviator) createCSSImportTag(assetImports []string) string {
 }
 
 func (a *Aviator) Close() {
-	a.vm.Close()
+	//a.vm.Close()
 }
 
 func (a *Aviator) DynamicAssetHandler(listenPath string) http.HandlerFunc {

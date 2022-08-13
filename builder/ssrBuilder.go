@@ -14,16 +14,18 @@ import (
 
 type SSRBuilder struct {
 	vm          js.VM
-	viewManager *ViewManager
+	viewManager *ViewManagerOld
 	workingDir  string
+	buildResult *esbuild.BuildResult
 }
 
 type CompiledResult struct {
-	JS  []byte
-	CSS []byte
+	JS        []byte
+	CSS       []byte
+	SourceMap []byte
 }
 
-func NewSSRBuilder(vm js.VM, viewManager *ViewManager, workingDir string) *SSRBuilder {
+func NewSSRBuilder(vm js.VM, viewManager *ViewManagerOld, workingDir string) *SSRBuilder {
 	return &SSRBuilder{
 		vm:          vm,
 		viewManager: viewManager,
@@ -45,9 +47,10 @@ func (s *SSRBuilder) DevBuild(_ context.Context) (*CompiledResult, error) {
 		Platform:      esbuild.PlatformBrowser,
 		GlobalName:    "__aviator__",
 		Bundle:        true,
-		Metafile:      true,
+		Metafile:      false,
 		LogLevel:      esbuild.LogLevelInfo,
-		Sourcemap:     esbuild.SourceMapInline,
+		//Sourcemap:     esbuild.SourceMapInline,
+		Target: esbuild.ES2015,
 		Plugins: []esbuild.Plugin{
 			s.ssrPlugin(),
 			wrappedComponentsPlugin(s.workingDir, s.viewManager, s.ssrCompile),
@@ -66,11 +69,39 @@ func (s *SSRBuilder) DevBuild(_ context.Context) (*CompiledResult, error) {
 	}
 
 	compiledResult := &CompiledResult{
+		//SourceMap: result.OutputFiles[0].Contents,
 		JS: result.OutputFiles[0].Contents,
 	}
 	if len(result.OutputFiles) > 1 {
 		compiledResult.CSS = result.OutputFiles[1].Contents
 	}
+
+	s.buildResult = &result
+
+	return compiledResult, nil
+}
+
+func (s *SSRBuilder) Rebuild() (*CompiledResult, error) {
+	result := s.buildResult.Rebuild()
+
+	if len(result.Errors) > 0 {
+		msgs := esbuild.FormatMessages(result.Errors, esbuild.FormatMessagesOptions{
+			Color:         true,
+			Kind:          esbuild.ErrorMessage,
+			TerminalWidth: 80,
+		})
+		return nil, fmt.Errorf(strings.Join(msgs, "\n"))
+	}
+
+	compiledResult := &CompiledResult{
+		//SourceMap: result.OutputFiles[0].Contents,
+		JS: result.OutputFiles[0].Contents,
+	}
+	if len(result.OutputFiles) > 1 {
+		compiledResult.CSS = result.OutputFiles[1].Contents
+	}
+
+	s.buildResult = &result
 
 	return compiledResult, nil
 }
@@ -113,7 +144,7 @@ func (s *SSRBuilder) ssrPlugin() esbuild.Plugin {
 					contents := buf.String()
 					result.ResolveDir = s.workingDir
 					result.Contents = &contents
-					result.Loader = esbuild.LoaderJS
+					result.Loader = esbuild.LoaderTS
 					return result, nil
 				},
 			)
@@ -131,14 +162,15 @@ type SvelteBuildOutput struct {
 
 //ssrCompile compiles a compiled
 func (s *SSRBuilder) ssrCompile(path string, code []byte) (*SvelteBuildOutput, error) {
+	format := `__svelte__.compile({ "Path": %q, "code": %q, "target": "ssr", "dev": %t, "css": false, "enableSourcemap": %t })`
 	expr := fmt.Sprintf(
-		`;__svelte__.compile({ "path": %q, "code": %q, "target": "ssr", "dev": %t, "css": false, "enableSourcemap": %t })`,
+		format,
 		path,
 		code,
 		true,
 		true,
 	)
-	result, err := s.vm.Eval(context.Background(), path, expr)
+	result, err := s.vm.Eval(path, expr)
 	if err != nil {
 		return nil, err
 	}

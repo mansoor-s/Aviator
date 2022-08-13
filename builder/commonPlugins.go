@@ -49,7 +49,7 @@ func npmJsPathPlugin(workingDir string) esbuild.Plugin {
 	return esbuild.Plugin{
 		Name: "js_path",
 		Setup: func(epb esbuild.PluginBuild) {
-			//handles imports that are JS files, but for some reason the import path doesn't
+			//handles imports that are JS files, but for some reason the import Path doesn't
 			//include the .js suffix
 			epb.OnResolve(
 				esbuild.OnResolveOptions{Filter: `\.+\/(.*\/)?[a-zA-Z0-9]+$`},
@@ -120,7 +120,7 @@ type SvelteCompilerFunc func(string, []byte) (*SvelteBuildOutput, error)
 // i.e:  <RootLayout><FooLayout><MyComponent></MyComponent></FooLayout></RootLayout>
 func wrappedComponentsPlugin(
 	workingDir string,
-	viewManager *ViewManager,
+	viewManager *ViewManagerOld,
 	compilerFunc SvelteCompilerFunc,
 ) esbuild.Plugin {
 	//index views by their WrappedUniqueName for easier lookup in plugin
@@ -167,9 +167,9 @@ func wrappedComponentsPlugin(
 						return result, err
 					}
 
-					contents := compiledCode.JSCode +
-						`//# sourceMappingURL=` +
-						compiledCode.JSSourceMap
+					contents := compiledCode.JSCode /* +
+					`//# sourceMappingURL=` +
+					compiledCode.JSSourceMap*/
 					result.ResolveDir = workingDir
 					result.Contents = &contents
 					result.Loader = esbuild.LoaderJSX
@@ -223,9 +223,9 @@ func svelteComponentsPlugin(
 						return result, err
 					}
 
-					contents := compiledCode.JSCode +
-						`//# sourceMappingURL=` +
-						compiledCode.JSSourceMap
+					contents := compiledCode.JSCode /* +
+					`//# sourceMappingURL=` +
+					compiledCode.JSSourceMap*/
 					result.ResolveDir = workingDir
 					result.Contents = &contents
 					result.Loader = esbuild.LoaderJSX

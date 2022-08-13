@@ -1,5 +1,6 @@
 package js
 
+/*
 import "rogchap.com/v8go"
 
 const (
@@ -30,3 +31,4 @@ func newV8JSError(err error) JSError {
 		err:     err,
 	}
 }
+*/

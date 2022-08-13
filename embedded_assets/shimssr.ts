@@ -25,9 +25,9 @@ export const self = {
 
 export const window = {
     btoa: (data: string): string => {
-        return btoa(data)
+        return ""//btoa(data)
     },
     atob: (data: string): string => {
-        return atob(data)
+        return ""//atob(data)
     },
 }

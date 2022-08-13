@@ -25,7 +25,7 @@ func main() {
 		aviator.WithViewsPath(viewsAbsPath),
 		aviator.WithAssetOutputPath(assetOutputAbsPath),
 		aviator.WithDevMode(true),
-		aviator.WithNumJsVMs(4),
+		aviator.WithNumJsVMs(30),
 		aviator.WithStaticAssetRoute("/bundled_assets"),
 	)
 
@@ -54,14 +54,14 @@ func main() {
 		}
 		rendered, err := a.Render(c.Request().Context(), "index.svelte", props)
 		if err != nil {
-			errStr := ""
+			/*errStr := ""
 			jsErr, ok := err.(aviator.JSError)
 			if ok {
 				errStr = jsErr.StackTrace()
 			} else {
 				errStr = err.Error()
-			}
-			return c.String(http.StatusOK, errStr)
+			}*/
+			return c.String(http.StatusOK, err.Error())
 		}
 
 		return c.HTML(http.StatusOK, rendered)
@@ -75,14 +75,14 @@ func main() {
 		}
 		rendered, err := a.Render(c.Request().Context(), "frog/tiger.svelte", props)
 		if err != nil {
-			errStr := ""
+			/*errStr := ""
 			jsErr, ok := err.(aviator.JSError)
 			if ok {
 				errStr = jsErr.StackTrace()
 			} else {
 				errStr = err.Error()
-			}
-			return c.String(http.StatusOK, errStr)
+			}*/
+			return c.String(http.StatusOK, err.Error())
 		}
 
 		return c.HTML(http.StatusOK, rendered)

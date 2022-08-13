@@ -33,7 +33,7 @@ const npmDir = "node_modules"
 type Layout struct {
 	Name string
 
-	//path is absolute
+	//Path is absolute
 	Path string
 
 	// nil if no parent layout exists
@@ -46,7 +46,7 @@ type Layout struct {
 	// ParentTree represents the directory this layout belongs in
 	ParentTree *componentTree
 
-	//used temporarily until the parent layout path can be resolved
+	//used temporarily until the parent layout Path can be resolved
 	parentLayoutName string
 
 	rootTree *componentTree
@@ -66,7 +66,7 @@ func (l *Layout) ApplicableLayouts() []*Layout {
 	return ancestors
 }
 
-//RelativePath returns the relative path of the layout to the views directory
+//RelativePath returns the relative Path of the layout to the views directory
 func (l *Layout) RelativePath() string {
 	relPath, _ := filepath.Rel(l.rootTree.path, l.Path)
 	return relPath
@@ -75,7 +75,7 @@ func (l *Layout) RelativePath() string {
 type Component struct {
 	Name string
 
-	//path is absolute
+	//Path is absolute
 	Path string
 
 	Layout *Layout
@@ -83,13 +83,13 @@ type Component struct {
 	// ParentTree represents the directory this component belongs in
 	ParentTree *componentTree
 
-	//used temporarily until the layout path can be resolved
+	//used temporarily until the layout Path can be resolved
 	layoutName string
 
 	rootTree *componentTree
 }
 
-//RelativePath returns the relative path of the component to the views directory
+//RelativePath returns the relative Path of the component to the views directory
 func (c *Component) RelativePath() string {
 	relPath, _ := filepath.Rel(c.rootTree.path, c.Path)
 	return relPath
@@ -131,9 +131,9 @@ type componentTree struct {
 	rootTree *componentTree
 }
 
-//CreateComponentTree creates a componentTree based on the absolute path
+//CreateComponentTree creates a componentTree based on the absolute Path
 // it performs a depth-first search through all subdirectories under
-// the specified path
+// the specified Path
 func CreateComponentTree(path string) (*componentTree, error) {
 	return createComponentTree(nil, path)
 
@@ -160,7 +160,7 @@ func createComponentTree(parentTree *componentTree, path string) (*componentTree
 	//resolve +layout parents if any
 	tree.resolveLayoutParents()
 
-	// find all component at current path
+	// find all component at current Path
 	err = tree.findComponents()
 	if err != nil {
 		return nil, err

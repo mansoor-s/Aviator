@@ -8,8 +8,6 @@ import (
 	"fmt"
 	esbuild "github.com/evanw/esbuild/pkg/api"
 	"github.com/mansoor-s/aviator/js"
-	"github.com/mansoor-s/aviator/utils"
-	"os"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -22,7 +20,8 @@ type BrowserImports struct {
 
 type BrowserBuilder struct {
 	vm          js.VM
-	viewManager *ViewManager
+	viewManager *ViewManagerOld
+	buildResult esbuild.BuildResult
 
 	outputDir  string
 	workingDir string
@@ -30,7 +29,7 @@ type BrowserBuilder struct {
 
 func NewBrowserBuilder(
 	vm js.VM,
-	viewManager *ViewManager,
+	viewManager *ViewManagerOld,
 	workingDir, outputDir string,
 ) *BrowserBuilder {
 	return &BrowserBuilder{
@@ -55,6 +54,9 @@ func (b *BrowserBuilder) BuildDev(_ context.Context) error {
 	var entryPoints []esbuild.EntryPoint
 
 	for _, view := range views {
+		if view.ComponentName != "Index" {
+			//continue
+		}
 		//skip layouts as entrypoints
 		if view.IsLayout {
 			continue
@@ -74,15 +76,15 @@ func (b *BrowserBuilder) BuildDev(_ context.Context) error {
 		EntryPointsAdvanced: entryPoints,
 		Outdir:              b.outputDir,
 		AbsWorkingDir:       b.workingDir,
-		ChunkNames:          "[name]-[hash]",
-		Format:              esbuild.FormatESModule,
-		Platform:            esbuild.PlatformBrowser,
+		//ChunkNames:          "[name]-[hash]",
+		Format:   esbuild.FormatESModule,
+		Platform: esbuild.PlatformBrowser,
 		// Add "import" condition to support svelte/internal
 		// https://esbuild.github.io/api/#how-conditions-work
 		Conditions:        []string{"browser", "default", "import"},
 		Metafile:          false,
 		Bundle:            true,
-		Splitting:         true,
+		Splitting:         false,
 		MinifyIdentifiers: false,
 		MinifySyntax:      false,
 		MinifyWhitespace:  false,
@@ -107,33 +109,47 @@ func (b *BrowserBuilder) BuildDev(_ context.Context) error {
 		return fmt.Errorf(strings.Join(msgs, "\n"))
 	}
 
-	//delete all old generated files
-	err := utils.RemoveDirContents(b.outputDir)
-	if err != nil {
-		return err
-	}
-
-	for _, file := range result.OutputFiles {
-		fileName := filepath.Base(file.Path)
-		extension := utils.FileExtension(fileName)
-		viewRefName := fileName[:len(fileName)-len(extension)-1]
-		view := viewsByOutputName[viewRefName]
-
-		//skip if no view is directly associated with this "chunk" file
-		if view != nil {
-			if extension == "js" {
-				view.JSImports = append(view.JSImports, fileName)
-			} else if extension == "css" {
-				view.CSSImports = append(view.CSSImports, fileName)
-			}
-		}
-
-		//save files to outputDir
-		err := os.WriteFile(filepath.Join(b.outputDir, fileName), file.Contents, 775)
+	b.buildResult = result
+	/*
+		//delete all old generated files
+		err := utils.RemoveDirContents(b.outputDir)
 		if err != nil {
 			return err
 		}
-	}
+
+		for _, file := range result.OutputFiles {
+			fileName := filepath.Base(file.Path)
+			extension := utils.FileExtension(fileName)
+			viewRefName := fileName[:len(fileName)-len(extension)-1]
+			view := viewsByOutputName[viewRefName]
+			view.JSImports = []string{}
+			view.CSSImports = []string{}
+
+			//skip if no view is directly associated with this "chunk" file
+			if view != nil {
+				if extension == "js" {
+					view.JSImports = append(view.JSImports, fileName)
+				} else if extension == "css" {
+					view.CSSImports = append(view.CSSImports, fileName)
+				}
+			}
+
+			//save files to outputDir
+			err := os.WriteFile(filepath.Join(b.outputDir, fileName), file.Contents, 775)
+			if err != nil {
+				return err
+			}
+
+		}
+	*/
+
+	return nil
+}
+
+func (b *BrowserBuilder) Rebuild() error {
+	result := b.buildResult.Rebuild()
+
+	b.buildResult = result
 
 	return nil
 }
@@ -182,13 +198,13 @@ func (b *BrowserBuilder) browserRuntimePlugin(viewsByOutputName map[string]*View
 
 func (b *BrowserBuilder) browserCompile(path string, code []byte) (*SvelteBuildOutput, error) {
 	expr := fmt.Sprintf(
-		`;__svelte__.compile({ "path": %q, "code": %q, "target": "dom", "dev": %t, "css": true, "enableSourcemap": %t })`,
+		`;__svelte__.compile({ "Path": %q, "code": %q, "target": "dom", "dev": %t, "css": true, "enableSourcemap": %t })`,
 		path,
 		code,
 		true,
 		true,
 	)
-	result, err := b.vm.Eval(context.Background(), path, expr)
+	result, err := b.vm.Eval(path, expr)
 	if err != nil {
 		return nil, err
 	}

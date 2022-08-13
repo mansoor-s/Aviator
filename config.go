@@ -23,7 +23,7 @@ type Aviator struct {
 	vm             js.VM
 	ssrBuilder     *builder.SSRBuilder
 	browserBuilder *builder.BrowserBuilder
-	viewManager    *builder.ViewManager
+	viewManager    *builder.ViewManagerOld
 	watcher        *fsnotify.Watcher
 	logger         Logger
 

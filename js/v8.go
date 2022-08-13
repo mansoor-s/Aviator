@@ -1,5 +1,6 @@
 package js
 
+/*
 import (
 	"context"
 	"errors"
@@ -85,7 +86,7 @@ func newV8VM() (*V8VM, error) {
 	}, nil
 }
 
-var _ VM = (*V8VM)(nil)
+//var _ VM = (*V8VM)(nil)
 
 //InitializationScript compiles and runs a script into the context's isolate
 func (vm *V8VM) InitializationScript(_ context.Context, path, code string) error {
@@ -127,3 +128,4 @@ func (vm *V8VM) Close() {
 	vm.context.Isolate().TerminateExecution()
 	vm.context.Isolate().Dispose()
 }
+*/

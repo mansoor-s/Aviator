@@ -7,25 +7,25 @@ import (
 )
 
 func TestGetLayoutName(t *testing.T) {
-	expectedName1 := "__layout"
-	name1, parent1 := getLayoutInfo("__layout.svelte")
+	expectedName1 := "+layout"
+	name1, parent1 := getLayoutInfo("+layout.svelte")
 	assert.Equal(t, expectedName1, name1)
 	assert.Equal(t, parent1, "")
 
 	expectedName2 := "foobar"
-	name2, parent2 := getLayoutInfo("__layout-foobar.svelte")
+	name2, parent2 := getLayoutInfo("+layout-foobar.svelte")
 	assert.Equal(t, expectedName2, name2)
 	assert.Equal(t, parent2, "")
 
 	expectedName3 := "foobar"
 	expectedParent1 := "cat"
-	name3, parent3 := getLayoutInfo("__layout-foobar@cat.svelte")
+	name3, parent3 := getLayoutInfo("+layout-foobar@cat.svelte")
 	assert.Equal(t, expectedName3, name3)
 	assert.Equal(t, expectedParent1, parent3)
 
-	expectedName4 := "__layout"
+	expectedName4 := "+layout"
 	expectedParent2 := "cat"
-	name4, parent4 := getLayoutInfo("__layout@cat.svelte")
+	name4, parent4 := getLayoutInfo("+layout@cat.svelte")
 	assert.Equal(t, expectedName4, name4)
 	assert.Equal(t, expectedParent2, parent4)
 }
@@ -53,7 +53,7 @@ func TestGetComponentWithLayoutName(t *testing.T) {
 //TODO: add tests here. Confirmed via debugger it is working as expected
 func TestCreateComponentTree(t *testing.T) {
 	absPath, err := filepath.Abs("./test_data/views")
-	assert.NoErrorf(t, err, "finding abs path should not return error")
+	assert.NoErrorf(t, err, "finding abs Path should not return error")
 
 	tree, err := CreateComponentTree(absPath)
 	assert.NoError(t, err)
@@ -62,7 +62,7 @@ func TestCreateComponentTree(t *testing.T) {
 
 func TestComponent_RelativePath(t *testing.T) {
 	absPath, err := filepath.Abs("./test_data/views")
-	assert.NoErrorf(t, err, "finding abs path should not return error")
+	assert.NoErrorf(t, err, "finding abs Path should not return error")
 
 	tree, err := CreateComponentTree(absPath)
 	assert.NoError(t, err)

@@ -8,14 +8,17 @@ import "github.com/mansoor-s/aviator/utils"
 // A View object can represent both a Component or a Layout
 type View struct {
 	ComponentName string
-	//UniqueName is the PascalCase of the path relative to views directory
+
+	//UniqueName is the PascalCase of the Path relative to views directory
 	UniqueName string
+
 	//WrappedUniqueName prefixes the unique name with "__AviatorWrapped_"
 	//i.e __AviatorWrapped{UniqueName}
 	//This is used to disambiguate the layout wrapped component from the component itself
 	WrappedUniqueName string
 	Path              string
-	//RelPath is the relative path from the project's views directory
+
+	//RelPath is the relative Path from the project's views directory
 	RelPath string
 
 	//A view can represent either a Component or a Layout
@@ -36,8 +39,10 @@ type View struct {
 	//applicableLayouts is used temporarily internally by viewManger
 	applicableLayouts []*Layout
 
-	//TODO: when Browser building is finished
-	ClientCode string
+	//TODO: when Browser building is finished.
+	//These are only used in dev mode
+	ClientJS  string
+	ClientCSS string
 }
 
 func (v *View) getApplicableLayouts() []*Layout {
@@ -77,12 +82,12 @@ func newViewFromLayout(l *Layout) *View {
 	}
 }
 
-//ViewManager stores views and fetches them during build and render time
-type ViewManager struct {
+//ViewManagerOld stores views and fetches them during build and render time
+type ViewManagerOld struct {
 	views map[string]*View
 }
 
-func NewViewManager(tree ComponentTree) *ViewManager {
+func NewViewManager(tree ComponentTree) *ViewManagerOld {
 	views := make(map[string]*View)
 	for _, component := range tree.GetAllComponents() {
 		view := newViewFromComponent(component)
@@ -106,19 +111,19 @@ func NewViewManager(tree ComponentTree) *ViewManager {
 		view.ApplicableLayoutViews = layoutViews
 	}
 
-	return &ViewManager{
+	return &ViewManagerOld{
 		views: views,
 	}
 }
 
-//ViewByRelPath returns a view by the relative path
-func (v *ViewManager) ViewByRelPath(path string) *View {
+//ViewByRelPath returns a view by the relative Path
+func (v *ViewManagerOld) ViewByRelPath(path string) *View {
 	view, _ := v.views[path]
 	return view
 }
 
 //AllViews returns all views
-func (v *ViewManager) AllViews() []*View {
+func (v *ViewManagerOld) AllViews() []*View {
 	var views []*View
 	for _, view := range v.views {
 		views = append(views, view)

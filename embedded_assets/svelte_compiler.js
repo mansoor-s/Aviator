@@ -45,10 +45,10 @@ var __svelte__ = (() => {
   };
   var window = {
     btoa: (data2) => {
-      return btoa(data2);
+      return "";
     },
     atob: (data2) => {
-      return atob(data2);
+      return "";
     }
   };
 
@@ -26969,11 +26969,12 @@ ${frame}`
       css,
       enableSourcemap
     });
+    const jsSourceMap = enableSourcemap === true ? svelte.js.map.toUrl() : "";
     return JSON.stringify({
       CSSCode: svelte.css.code,
       JSCode: svelte.js.code,
       CSSSourceMap: "",
-      JSSourceMap: svelte.js.map.toUrl()
+      JSSourceMap: jsSourceMap
     });
   }
   return __toCommonJS(compiler_exports);

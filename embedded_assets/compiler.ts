@@ -28,6 +28,7 @@ type Output =
 }
 
 // Compile svelte code
+
 export function compile(input: Input): string {
     const { code, path, target, dev, css, enableSourcemap } = input
     const svelte = compileSvelte(code, {
@@ -40,10 +41,12 @@ export function compile(input: Input): string {
         enableSourcemap: enableSourcemap,
     })
 
+    const jsSourceMap = enableSourcemap === true ? svelte.js.map.toUrl() : ""
+
     return JSON.stringify({
         CSSCode: svelte.css.code,
         JSCode: svelte.js.code,
         CSSSourceMap: "", //svelte.css.map.toUrl(),
-        JSSourceMap: svelte.js.map.toUrl(),
+        JSSourceMap: jsSourceMap,
     } as Output)
 }
