@@ -11,7 +11,6 @@
     //console.log("Myprop value: " + Myprop);
 
     let count = 0;
-
     export function handleClick () {
         count = count + 1;
     }
@@ -23,6 +22,7 @@
 <Modal body {isOpen} {toggle} header="Open Modal!">
     <p>I hope you like dialogs</p>
 </Modal>
+
 
 
 <Button on:click={handleClick}  color="primary" outline>Click Me! {count}</Button>

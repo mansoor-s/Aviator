@@ -2,41 +2,43 @@ package builder
 
 import (
 	"bytes"
-	"context"
 	_ "embed"
 	"encoding/json"
 	"fmt"
 	esbuild "github.com/evanw/esbuild/pkg/api"
 	"github.com/mansoor-s/aviator/js"
+	"github.com/mansoor-s/aviator/utils"
 	"path/filepath"
 	"strings"
 	"text/template"
 )
 
+/*
 type BrowserImports struct {
 	JS  []string
 	CSS []string
 }
+*/
 
 type BrowserBuilder struct {
-	vm          js.VM
-	viewManager *viewManager
-	buildResult esbuild.BuildResult
+	vm     js.VM
+	cache  *cacheManager
+	logger utils.Logger
 
-	outputDir  string
 	workingDir string
 }
 
 func NewBrowserBuilder(
+	logger utils.Logger,
 	vm js.VM,
-	viewManager *viewManager,
-	workingDir, outputDir string,
+	cache *cacheManager,
+	workingDir string,
 ) *BrowserBuilder {
 	return &BrowserBuilder{
-		vm:          vm,
-		workingDir:  workingDir,
-		outputDir:   outputDir,
-		viewManager: viewManager,
+		logger:     logger,
+		vm:         vm,
+		workingDir: workingDir,
+		cache:      cache,
 	}
 }
 
@@ -46,19 +48,13 @@ func NewBrowserBuilder(
 
 //BuildDev creates assets for embedding into the rendered view
 // It persists the assets into the output directory
-func (b *BrowserBuilder) BuildDev(_ context.Context) error {
-	views := b.viewManager.AllViews()
-	viewsByEntryPoint := make(map[string]*View, len(views))
-	viewsByOutputName := make(map[string]*View, len(views))
+func (b *BrowserBuilder) BuildDev(allViews []*View) error {
+	viewsByEntryPoint := make(map[string]*View, len(allViews))
+	viewsByOutputName := make(map[string]*View, len(allViews))
 
 	var entryPoints []esbuild.EntryPoint
 
-	for _, view := range views {
-		//TODO: for testing. remove me
-		if view.ComponentName != "Index" {
-			//continue
-		}
-
+	for _, view := range allViews {
 		if !view.IsEntrypoint {
 			continue
 		}
@@ -67,7 +63,7 @@ func (b *BrowserBuilder) BuildDev(_ context.Context) error {
 		outputPrettyName := view.UniqueName + ".svelte"
 		entryPoints = append(entryPoints, esbuild.EntryPoint{
 			InputPath:  entryPath,
-			OutputPath: filepath.Join(b.outputDir, outputPrettyName),
+			OutputPath: outputPrettyName,
 		})
 		viewsByOutputName[outputPrettyName] = view
 		viewsByEntryPoint[entryPath] = view
@@ -75,27 +71,22 @@ func (b *BrowserBuilder) BuildDev(_ context.Context) error {
 
 	result := esbuild.Build(esbuild.BuildOptions{
 		EntryPointsAdvanced: entryPoints,
-		Outdir:              b.outputDir,
+		Outdir:              "./",
 		AbsWorkingDir:       b.workingDir,
-		//ChunkNames:          "[name]-[hash]",
-		Format:   esbuild.FormatESModule,
-		Platform: esbuild.PlatformBrowser,
+		Format:              esbuild.FormatESModule,
+		Platform:            esbuild.PlatformBrowser,
 		// Add "import" condition to support svelte/internal
 		// https://esbuild.github.io/api/#how-conditions-work
-		Conditions:        []string{"browser", "default", "import"},
-		Metafile:          false,
-		Bundle:            true,
-		Splitting:         false,
-		MinifyIdentifiers: false,
-		MinifySyntax:      false,
-		MinifyWhitespace:  false,
-		Sourcemap:         esbuild.SourceMapInline,
-		LogLevel:          esbuild.LogLevelInfo,
+		Conditions: []string{"browser", "default", "import"},
+		Metafile:   false,
+		Bundle:     true,
+		Sourcemap:  esbuild.SourceMapInline,
+		LogLevel:   esbuild.LogLevelInfo,
 		Plugins: append(
 			[]esbuild.Plugin{
 				b.browserRuntimePlugin(viewsByEntryPoint),
-				wrappedComponentsPlugin(b.workingDir, b.viewManager, b.browserCompile),
-				svelteComponentsPlugin(b.workingDir, b.browserCompile),
+				wrappedComponentsPlugin(b.cache, b.workingDir, allViews, b.browserCompile),
+				svelteComponentsPlugin(b.cache, b.workingDir, b.browserCompile),
 				npmJsPathPlugin(b.workingDir),
 			},
 		),
@@ -110,47 +101,21 @@ func (b *BrowserBuilder) BuildDev(_ context.Context) error {
 		return fmt.Errorf(strings.Join(msgs, "\n"))
 	}
 
-	b.buildResult = result
-	/*
-		//delete all old generated files
-		err := utils.RemoveDirContents(b.outputDir)
-		if err != nil {
-			return err
+	for _, file := range result.OutputFiles {
+		fileName := filepath.Base(file.Path)
+		extension := utils.FileExtension(fileName)
+		viewRefName := fileName[:len(fileName)-len(extension)-1]
+
+		view := viewsByOutputName[viewRefName]
+		view.JSImports = []string{}
+		view.CSSImports = []string{}
+
+		if extension == "js" {
+			view.JSImports = append(view.JSImports, fileName)
+		} else if extension == "css" {
+			view.CSSImports = append(view.CSSImports, fileName)
 		}
-
-		for _, file := range result.OutputFiles {
-			fileName := filepath.Base(file.Path)
-			extension := utils.FileExtension(fileName)
-			viewRefName := fileName[:len(fileName)-len(extension)-1]
-			view := viewsByOutputName[viewRefName]
-			view.JSImports = []string{}
-			view.CSSImports = []string{}
-
-			//skip if no view is directly associated with this "chunk" file
-			if view != nil {
-				if extension == "js" {
-					view.JSImports = append(view.JSImports, fileName)
-				} else if extension == "css" {
-					view.CSSImports = append(view.CSSImports, fileName)
-				}
-			}
-
-			//save files to outputDir
-			err := os.WriteFile(filepath.Join(b.outputDir, fileName), file.Contents, 775)
-			if err != nil {
-				return err
-			}
-
-		}
-	*/
-
-	return nil
-}
-
-func (b *BrowserBuilder) Rebuild() error {
-	result := b.buildResult.Rebuild()
-
-	b.buildResult = result
+	}
 
 	return nil
 }
@@ -163,7 +128,7 @@ var browserGenerator = template.Must(template.New("browserTemplate").Parse(brows
 //browserRuntimePlugin renders the browserTemplate for each component
 //The rendered content acts as the entrypoint that are used for the esbuild and
 //also imported by each of the view in the final HTML
-func (b *BrowserBuilder) browserRuntimePlugin(viewsByOutputName map[string]*View) esbuild.Plugin {
+func (b *BrowserBuilder) browserRuntimePlugin(viewsByEntryPoint map[string]*View) esbuild.Plugin {
 	return esbuild.Plugin{
 		Name: "browserRuntimePlugin",
 		Setup: func(epb esbuild.PluginBuild) {
@@ -179,7 +144,7 @@ func (b *BrowserBuilder) browserRuntimePlugin(viewsByOutputName map[string]*View
 			epb.OnLoad(
 				esbuild.OnLoadOptions{Filter: `.*`, Namespace: "browserRuntime"},
 				func(args esbuild.OnLoadArgs) (result esbuild.OnLoadResult, err error) {
-					view := viewsByOutputName[args.Path]
+					view := viewsByEntryPoint[args.Path]
 
 					buf := bytes.Buffer{}
 					err = browserGenerator.Execute(&buf, view)

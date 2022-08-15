@@ -2,21 +2,21 @@ package builder
 
 import (
 	"bytes"
-	"context"
 	_ "embed"
 	"encoding/json"
 	"fmt"
 	esbuild "github.com/evanw/esbuild/pkg/api"
 	"github.com/mansoor-s/aviator/js"
+	"github.com/mansoor-s/aviator/utils"
 	"strings"
 	"text/template"
 )
 
 type SSRBuilder struct {
-	vm          js.VM
-	viewManager *ViewManagerOld
-	workingDir  string
-	buildResult *esbuild.BuildResult
+	vm         js.VM
+	logger     utils.Logger
+	workingDir string
+	cache      *cacheManager
 }
 
 type CompiledResult struct {
@@ -25,15 +25,27 @@ type CompiledResult struct {
 	SourceMap []byte
 }
 
-func NewSSRBuilder(vm js.VM, viewManager *ViewManagerOld, workingDir string) *SSRBuilder {
+func NewSSRBuilder(
+	logger utils.Logger,
+	vm js.VM,
+	cache *cacheManager,
+	workingDir string,
+) *SSRBuilder {
 	return &SSRBuilder{
-		vm:          vm,
-		viewManager: viewManager,
-		workingDir:  workingDir,
+		logger:     logger,
+		vm:         vm,
+		workingDir: workingDir,
+		cache:      cache,
 	}
 }
 
-func (s *SSRBuilder) DevBuild(_ context.Context) (*CompiledResult, error) {
+func (s *SSRBuilder) DevBuild(allViews []*View) (*CompiledResult, error) {
+	allEntryPointViews := []*View{}
+	for _, view := range allViews {
+		if view.IsEntrypoint {
+			allEntryPointViews = append(allEntryPointViews, view)
+		}
+	}
 	result := esbuild.Build(esbuild.BuildOptions{
 		//__aviator_ssr.js is a file created by ssrPlugin at build-time
 		EntryPointsAdvanced: []esbuild.EntryPoint{
@@ -52,9 +64,9 @@ func (s *SSRBuilder) DevBuild(_ context.Context) (*CompiledResult, error) {
 		//Sourcemap:     esbuild.SourceMapInline,
 		Target: esbuild.ES2015,
 		Plugins: []esbuild.Plugin{
-			s.ssrPlugin(),
-			wrappedComponentsPlugin(s.workingDir, s.viewManager, s.ssrCompile),
-			svelteComponentsPlugin(s.workingDir, s.ssrCompile),
+			s.ssrPlugin(allEntryPointViews),
+			wrappedComponentsPlugin(s.cache, s.workingDir, allViews, s.ssrCompile),
+			svelteComponentsPlugin(s.cache, s.workingDir, s.ssrCompile),
 			npmJsPathPlugin(s.workingDir),
 		},
 	})
@@ -76,33 +88,6 @@ func (s *SSRBuilder) DevBuild(_ context.Context) (*CompiledResult, error) {
 		compiledResult.CSS = result.OutputFiles[1].Contents
 	}
 
-	s.buildResult = &result
-
-	return compiledResult, nil
-}
-
-func (s *SSRBuilder) Rebuild() (*CompiledResult, error) {
-	result := s.buildResult.Rebuild()
-
-	if len(result.Errors) > 0 {
-		msgs := esbuild.FormatMessages(result.Errors, esbuild.FormatMessagesOptions{
-			Color:         true,
-			Kind:          esbuild.ErrorMessage,
-			TerminalWidth: 80,
-		})
-		return nil, fmt.Errorf(strings.Join(msgs, "\n"))
-	}
-
-	compiledResult := &CompiledResult{
-		//SourceMap: result.OutputFiles[0].Contents,
-		JS: result.OutputFiles[0].Contents,
-	}
-	if len(result.OutputFiles) > 1 {
-		compiledResult.CSS = result.OutputFiles[1].Contents
-	}
-
-	s.buildResult = &result
-
 	return compiledResult, nil
 }
 
@@ -115,8 +100,7 @@ var ssrGenerator = template.Must(template.New("ssrTemplate").Parse(ssrTemplate))
 // Generate the virtual __aviator_ssr.js which includes a reference to all
 // svelte components. __aviator_ssr.js serves as the entrypoint
 // It will compile Go template file ssrHelperTemplate.gotext
-func (s *SSRBuilder) ssrPlugin() esbuild.Plugin {
-	viewList := s.viewManager.AllViews()
+func (s *SSRBuilder) ssrPlugin(allEntryPointViews []*View) esbuild.Plugin {
 	return esbuild.Plugin{
 		Name: "ssr",
 		Setup: func(epb esbuild.PluginBuild) {
@@ -133,7 +117,7 @@ func (s *SSRBuilder) ssrPlugin() esbuild.Plugin {
 				func(args esbuild.OnLoadArgs) (result esbuild.OnLoadResult, err error) {
 					//this data is used to compile the .gotext template to get JS
 					viewData := map[string]interface{}{
-						"Views": viewList,
+						"Views": allEntryPointViews,
 					}
 
 					buf := bytes.Buffer{}

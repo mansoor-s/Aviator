@@ -1,7 +1,9 @@
 package builder
 
 import (
+	"fmt"
 	"github.com/fsnotify/fsnotify"
+	"github.com/mansoor-s/aviator/js"
 	"github.com/mansoor-s/aviator/utils"
 	"github.com/mansoor-s/aviator/watcher"
 	"os"
@@ -42,59 +44,118 @@ It renders the view when requested
 
 const eventBatchTime = 500 * time.Millisecond
 
-type viewManager struct {
+type ViewManager struct {
 	viewsDir  string
 	cacheDir  string
 	isDevMode bool
 	tree      *componentTree
+	vm        js.VM
 
-	ssrCacheManager     *cacheManager
-	browserCacheManager *cacheManager
-	watcher             *watcher.Batcher
+	//ssrCacheManager     *cacheManager
+	//browserCacheManager *cacheManager
+	watcher *watcher.Batcher
+	views   map[string]*View
 
-	views map[string]*View
+	ssrCache     *cacheManager
+	browserCache *cacheManager
+
+	browserBuilder *BrowserBuilder
+	ssrBuilder     *SSRBuilder
+	logger         utils.Logger
 
 	sync.Mutex
 }
 
 func NewViewManager(
-	tree *componentTree,
+	logger utils.Logger,
+	vm js.VM,
+	tree ComponentTree,
 	isDevMode bool,
 	cacheDir string,
-) (*viewManager, error) {
+	viewsDir string,
+) (*ViewManager, error) {
 	viewWatcher, err := watcher.New(eventBatchTime)
 	if err != nil {
 		return nil, err
 	}
 
-	ssrCacheManager, err := newCacheManager(CacheTypeSSR, cacheDir)
+	ssrCache, err := newCacheManager(CacheTypeSSR, cacheDir)
 	if err != nil {
 		return nil, err
 	}
 
-	browserCacheManager, err := newCacheManager(CacheTypeBrowser, cacheDir)
+	browserCache, err := newCacheManager(CacheTypeBrowser, cacheDir)
 	if err != nil {
 		return nil, err
 	}
 
-	v := &viewManager{
-		watcher:             viewWatcher,
-		tree:                tree,
-		browserCacheManager: browserCacheManager,
-		ssrCacheManager:     ssrCacheManager,
-		isDevMode:           isDevMode,
+	ssrBuilder := NewSSRBuilder(logger, vm, ssrCache, viewsDir)
+	browserBuilder := NewBrowserBuilder(logger, vm, browserCache, viewsDir)
+	v := &ViewManager{
+		vm:             vm,
+		logger:         logger,
+		watcher:        viewWatcher,
+		tree:           tree.(*componentTree),
+		isDevMode:      isDevMode,
+		browserBuilder: browserBuilder,
+		ssrBuilder:     ssrBuilder,
+		ssrCache:       ssrCache,
+		browserCache:   browserCache,
+		viewsDir:       viewsDir,
 	}
 
 	v.refreshViews()
 
-	return v, nil
+	err = v.Build()
+
+	return v, err
 }
 
-func (v *viewManager) Render(viePath string) error {
+func (v *ViewManager) Build() error {
+	allViews := v.AllViews()
+
+	err := v.browserBuilder.BuildDev(allViews)
+	if err != nil {
+		v.logger.Error("error building SSR build: " + err.Error())
+		return err
+	}
+
+	err = v.browserCache.Persist()
+	if err != nil {
+		v.logger.Error("error persisting Browser cache: " + err.Error())
+		return err
+	}
+
+	ssrBuild, err := v.ssrBuilder.DevBuild(allViews)
+	if err != nil {
+		v.logger.Error("error building Browser build: " + err.Error())
+		return err
+	}
+
+	err = v.ssrCache.Persist()
+	if err != nil {
+		v.logger.Error("error persisting SSR cache: " + err.Error())
+		return err
+	}
+
+	_, err = v.vm.Eval(
+		"aviator_ssr_router.js",
+		string(ssrBuild.JS),
+	)
+
+	return err
+}
+
+func (v *ViewManager) Render(viewPath string) error {
+	view := v.ViewByRelPath(viewPath)
+	if view == nil {
+		return fmt.Errorf(`view in path "%s" not found`, viewPath)
+	}
+
 	return nil
 }
 
-func (v *viewManager) refreshViews() {
+func (v *ViewManager) refreshViews() {
 	v.views = map[string]*View{}
 
 	for _, component := range v.tree.GetAllComponents() {
@@ -121,13 +182,13 @@ func (v *viewManager) refreshViews() {
 }
 
 //ViewByRelPath returns a view by the relative Path
-func (v *viewManager) ViewByRelPath(path string) *View {
+func (v *ViewManager) ViewByRelPath(path string) *View {
 	view, _ := v.views[path]
 	return view
 }
 
 //AllViews returns all views
-func (v *viewManager) AllViews() []*View {
+func (v *ViewManager) AllViews() []*View {
 	var views []*View
 	for _, view := range v.views {
 		views = append(views, view)
@@ -136,10 +197,11 @@ func (v *viewManager) AllViews() []*View {
 }
 
 //StartWatch starts watching views directory for changes
-func (v *viewManager) StartWatch() error {
+func (v *ViewManager) StartWatch() error {
 	//fsnotify doesn't currently support watching a directory recursively, so we must
 	//manually watch each child directory here
 	for _, dirPath := range v.tree.GetAllDescendantPaths() {
+		v.logger.Info("Starting watch on dir: " + dirPath)
 		err := v.watcher.Add(dirPath)
 		if err != nil {
 			return err
@@ -152,13 +214,18 @@ func (v *viewManager) StartWatch() error {
 			case events, _ := <-v.watcher.Events:
 				err := v.handleEvents(events)
 				if err != nil {
-					//TODO: log here
+					v.logger.Error(
+						fmt.Errorf(`error while handling view files changes: %w`,
+							err).Error(),
+					)
 				}
-			case _, ok := <-v.watcher.Errors():
+			case err, ok := <-v.watcher.Errors():
 				if !ok {
 					return
 				}
-				//TODO: log here
+				v.logger.Error(
+					fmt.Errorf(`error while watching view files: %w`, err).Error(),
+				)
 			}
 		}
 	}()
@@ -166,14 +233,16 @@ func (v *viewManager) StartWatch() error {
 	return nil
 }
 
-func (v *viewManager) handleEvents(events []fsnotify.Event) error {
+func (v *ViewManager) handleEvents(events []fsnotify.Event) error {
 	v.Lock()
 	defer v.Unlock()
 
 	numHandledEvents := 0
 	for _, e := range events {
+		v.logger.Info("Handling event")
 		//skip events on editor created temp files
 		if isTempFile(e.Name) || e.Name == "" {
+			v.logger.Info("Skipping temp file: " + e.Name)
 			continue
 		}
 
@@ -212,44 +281,22 @@ func (v *viewManager) handleEvents(events []fsnotify.Event) error {
 
 	if numHandledEvents > 0 {
 		v.refreshViews()
+		err := v.Build()
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-func (v *viewManager) handleRenameEvent(e fsnotify.Event) error {
-	err := v.ssrCacheManager.Invalidate(e.Name)
+func (v *ViewManager) handleRenameEvent(e fsnotify.Event) error {
+	err := v.ssrCache.Invalidate(e.Name)
 	if err != nil {
 		return err
 	}
 
-	err = v.browserCacheManager.Invalidate(e.Name)
-	if err != nil {
-		return err
-	}
-
-	rescanPath := filepath.Base(e.Name)
-
-	//rescan the parent dir for both file and dir removal
-	return v.tree.RescanDir(rescanPath)
-}
-
-func (v *viewManager) handleWriteEvent(e fsnotify.Event) error {
-	err := v.ssrCacheManager.Invalidate(e.Name)
-	if err != nil {
-		return err
-	}
-
-	return v.browserCacheManager.Invalidate(e.Name)
-}
-
-func (v *viewManager) handleRemoveEvent(e fsnotify.Event) error {
-	err := v.ssrCacheManager.Invalidate(e.Name)
-	if err != nil {
-		return err
-	}
-
-	err = v.browserCacheManager.Invalidate(e.Name)
+	err = v.browserCache.Invalidate(e.Name)
 	if err != nil {
 		return err
 	}
@@ -260,7 +307,34 @@ func (v *viewManager) handleRemoveEvent(e fsnotify.Event) error {
 	return v.tree.RescanDir(rescanPath)
 }
 
-func (v *viewManager) handleCreateEvent(e fsnotify.Event) error {
+func (v *ViewManager) handleWriteEvent(e fsnotify.Event) error {
+	v.logger.Info("File updated: " + e.Name)
+	err := v.ssrCache.Invalidate(e.Name)
+	if err != nil {
+		return err
+	}
+
+	return v.browserCache.Invalidate(e.Name)
+}
+
+func (v *ViewManager) handleRemoveEvent(e fsnotify.Event) error {
+	err := v.ssrCache.Invalidate(e.Name)
+	if err != nil {
+		return err
+	}
+
+	err = v.browserCache.Invalidate(e.Name)
+	if err != nil {
+		return err
+	}
+
+	rescanPath := filepath.Base(e.Name)
+
+	//rescan the parent dir for both file and dir removal
+	return v.tree.RescanDir(rescanPath)
+}
+
+func (v *ViewManager) handleCreateEvent(e fsnotify.Event) error {
 	fileInfo, err := os.Stat(e.Name)
 	if err != nil {
 		return err

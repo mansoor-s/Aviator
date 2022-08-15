@@ -8,7 +8,6 @@ import (
 
 // View objects are passed to the go-template file responsible for creating the virtual __aviator_ssr.js file
 // in the SSR Plugin
-// During render time, their UniqueName and
 // A View object can represent both a Component or a Layout
 type View struct {
 	ComponentName string
@@ -46,11 +45,6 @@ type View struct {
 
 	//applicableLayouts is used temporarily internally by viewManger
 	applicableLayouts []*Layout
-
-	//TODO: when Browser building is finished.
-	//These are only used in dev mode
-	//ClientJS  string
-	//ClientCSS string
 }
 
 func (v *View) getApplicableLayouts() []*Layout {

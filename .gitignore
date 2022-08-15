@@ -42,3 +42,5 @@ node_modules/
 
 #generated assets in example uses
 bundled_assets/
+
+.aviator_cache

@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/fsnotify/fsnotify"
 	"github.com/mansoor-s/aviator/builder"
 	"github.com/mansoor-s/aviator/js"
 	"net/http"
@@ -29,10 +28,11 @@ var defaultHTMLGenerator = template.Must(template.New("defaultHTML").Parse(defau
 
 func NewAviator(configs ...Option) *Aviator {
 	a := &Aviator{
-		numVMs:        1,
+		numVMs:        4,
 		logger:        stdOutLogger{},
 		htmlGenerator: defaultHTMLGenerator,
 		htmlLang:      "en",
+		cacheDir:      ".aviator_cache",
 	}
 	for _, config := range configs {
 		config(a)
@@ -64,18 +64,12 @@ func (a *Aviator) Init() error {
 		return err
 	}
 
-	//TODO: make this configurable
-	//a.vm, err = js.NewV8VMPool(a.numVMs, svelteCompilerCode)
 	a.vm, err = js.NewGojaVMPool(a.numVMs)
 	//some vm instance initializations might have succeeded. Clean up if possible
 	if err != nil {
 		return err
 	}
 
-	/*_, err = a.vm.Eval(
-		"svelte_compiler_init.js",
-		svelteCompilerCode,
-	)*/
 	err = a.vm.InitializationScript(
 		"svelte_compiler_init.js",
 		svelteCompilerCode,
@@ -84,130 +78,31 @@ func (a *Aviator) Init() error {
 		return err
 	}
 
-	if a.isDevMode {
-		err := a.rebuildViews()
-		if err != nil {
-			return err
-		}
-	}
-
-	//if !a.isDevMode {
-	// add SSR JS to VM as compiled JS for faster execution
-	//}
-
-	a.isInitialized = true
-
-	return nil
-}
-
-//startChangeWatcher requires a mutex lock. That's currently handled by the caller
-func (a *Aviator) startChangeWatcher() error {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		for {
-			select {
-			case _, ok := <-watcher.Events:
-				var err error
-				if !ok {
-					return
-				}
-
-				err = a.rebuildViews()
-
-				if err != nil {
-					a.logger.Error(
-						fmt.Errorf("failed to rebuild views on FS change: %w", err).Error(),
-					)
-				}
-				//return early because we're about to rebuild everything from scratch
-				err = watcher.Close()
-				if err != nil {
-					a.logger.Error(
-						fmt.Errorf("error fswatch close: %w", err).Error(),
-					)
-				}
-				return
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				a.logger.Error(fmt.Errorf("watcher error: %w", err).Error())
-			}
-		}
-	}()
-
-	//fsnotify doesn't currently support watching a whole directory tree, so we must
-	//manually watch each child directory here
-	for _, dirPath := range a.componentTree.GetAllDescendantPaths() {
-		err = watcher.Add(dirPath)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// rebuildViews destroys all View objects and rescans the views directory
-// to reconstruct the component tree.
-// It will then re-build all components
-func (a *Aviator) rebuildViews() error {
-	a.viewLock.Lock()
-	defer a.viewLock.Unlock()
-
-	var err error
 	a.componentTree, err = builder.CreateComponentTree(a.viewsPath)
 	if err != nil {
 		return err
 	}
 
-	a.viewManager = builder.NewViewManagerOld(a.componentTree)
-
-	a.ssrBuilder = builder.NewSSRBuilder(a.vm, a.viewManager, a.viewsPath)
-
-	compiledSSRResult, err := a.ssrBuilder.DevBuild(context.Background())
-	if err != nil {
-		//don't exit the update loop on esbuild errors
-		a.logger.Error("error building SSR: " + err.Error())
-		//watch for changes
-		return a.startChangeWatcher()
-	}
-
-	browserBuilder := builder.NewBrowserBuilder(
-		a.vm, a.viewManager, a.viewsPath, a.outputPath)
-
-	err = browserBuilder.BuildDev(context.Background())
-	if err != nil {
-		//don't exit the update loop on esbuild errors
-		a.logger.Error("error building browser bundle: " + err.Error())
-		//watch for changes
-		return a.startChangeWatcher()
-	}
-
-	a._devModeSSRCompiledJs = compiledSSRResult.JS
-	a._devModeSSRCompiledCSS = compiledSSRResult.CSS
-	//cssHash := fmt.Sprintf("%x", sha256.Sum256(a._devModeSSRCompiledCSS))
-	//a._compiledCSSFileName = "bundled_css_" + cssHash[:10] + ".css"
-
-	/*err = a.vm.InitializationScript(
-		context.Background(),
-		"aviator_ssr_router.js",
-		string(compiledSSRResult.JS),
-	)*/
-	_, err = a.vm.Eval(
-		"aviator_ssr_router.js",
-		string(compiledSSRResult.JS),
+	a.viewManager, err = builder.NewViewManager(
+		a.logger,
+		a.vm,
+		a.componentTree,
+		a.isDevMode,
+		a.cacheDir,
+		a.viewsPath,
 	)
 	if err != nil {
 		return err
 	}
 
-	//watch for changes
-	return a.startChangeWatcher()
+	err = a.viewManager.StartWatch()
+	if err != nil {
+		return err
+	}
+
+	a.isInitialized = true
+
+	return nil
 }
 
 type ssrData struct {
@@ -227,14 +122,7 @@ func (a *Aviator) Render(
 	viewPath string,
 	props interface{},
 ) (string, error) {
-	var view *builder.View
-	if a.isDevMode {
-		a.viewLock.RLock()
-		defer a.viewLock.RUnlock()
-		view = a.viewManager.ViewByRelPath(viewPath)
-	} else {
-		view = a.viewManager.ViewByRelPath(viewPath)
-	}
+	view := a.viewManager.ViewByRelPath(viewPath)
 
 	if view == nil {
 		return "", fmt.Errorf("view does not exist in path %s", viewPath)

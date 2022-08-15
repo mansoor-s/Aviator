@@ -70,6 +70,7 @@ type cacheItem struct {
 
 	pendingCacheWrite    bool
 	pendingMetadataWrite bool
+	pendingWrite         bool
 
 	//indicate if cache data should be deleted if it isn't being dependent on by anything
 	markedForDeletion bool
@@ -96,12 +97,11 @@ func newEmptyCacheItem(cacheFilePath, metadataFilePath string) *cacheItem {
 
 func newCacheItem(cacheDir, path string, content *string) *cacheItem {
 	c := &cacheItem{
-		cacheDir:             cacheDir,
-		path:                 path,
-		content:              content,
-		dependents:           map[string]*cacheItem{},
-		pendingCacheWrite:    true,
-		pendingMetadataWrite: true,
+		cacheDir:     cacheDir,
+		path:         path,
+		content:      content,
+		dependents:   map[string]*cacheItem{},
+		pendingWrite: true,
 	}
 
 	h := sha1.New()
@@ -160,7 +160,7 @@ func (c *cacheItem) readMetadataFile() error {
 }
 
 func (c *cacheItem) readCacheFile() error {
-	fileContent, err := os.ReadFile(c.metadataFilePath)
+	fileContent, err := os.ReadFile(c.cacheFilePath)
 	if err != nil {
 		return err
 	}
@@ -172,7 +172,7 @@ func (c *cacheItem) readCacheFile() error {
 }
 
 func (c *cacheItem) ReadFS() error {
-	err := c.readMetadataFile()
+	err := c.readCacheFile()
 	if err != nil {
 		return err
 	}
@@ -193,7 +193,6 @@ func (c *cacheItem) writeCacheFile() error {
 		return err
 	}
 
-	c.pendingCacheWrite = false
 	return nil
 }
 
@@ -224,24 +223,25 @@ func (c *cacheItem) writeMetadataFile() error {
 		return err
 	}
 
-	c.pendingMetadataWrite = false
 	return nil
 }
 
+func (c *cacheItem) HasPendingWrite() bool {
+	return c.pendingWrite
+}
+
 func (c *cacheItem) PersistToFS() error {
-	if c.pendingCacheWrite {
-		err := c.writeCacheFile()
-		if err != nil {
-			return err
-		}
+	err := c.writeCacheFile()
+	if err != nil {
+		return err
 	}
 
-	if c.pendingMetadataWrite {
-		err := c.writeMetadataFile()
-		if err != nil {
-			return err
-		}
+	err = c.writeMetadataFile()
+	if err != nil {
+		return err
 	}
+
+	c.pendingWrite = false
 
 	return nil
 }
@@ -275,12 +275,15 @@ func (c *cacheItem) RemoveDependent(dependant *cacheItem) {
 
 	if len(c.dependents) == 0 {
 		c.markedForDeletion = true
+	} else {
+		c.pendingWrite = true
 	}
 }
 
 func (c *cacheItem) AddDependent(dependant *cacheItem) {
 	c.dependents[dependant.path] = dependant
 	c.markedForDeletion = false
+	c.pendingWrite = true
 }
 
 type cacheManager struct {
@@ -294,7 +297,7 @@ type cacheManager struct {
 	//when the cacheItem is created, the dependants are moved there and cleared from here
 	cacheItemDependent map[string][]*cacheItem
 
-	sync.Mutex
+	sync.RWMutex
 }
 
 func newCacheManager(cacheType int, cacheDir string) (*cacheManager, error) {
@@ -333,75 +336,26 @@ func newCacheManager(cacheType int, cacheDir string) (*cacheManager, error) {
 	return c, nil
 }
 
-func (c *cacheManager) readCacheDir() error {
-	files, err := os.ReadDir(c.cacheDir)
-	if err != nil {
-		return err
-	}
-
-	//read all cached content
-	for _, file := range files {
-		if file.IsDir() {
-			continue
-		}
-		if filepath.Ext(file.Name()) != ".metadata" {
+func (c *cacheManager) Persist() error {
+	c.Lock()
+	defer c.Unlock()
+	for _, cache := range c.caches {
+		if !cache.HasPendingWrite() {
 			continue
 		}
 
-		nameParts := strings.Split(file.Name(), ".")
-		if len(nameParts) != 2 {
-			continue
-		}
-
-		cachePath := filepath.Join(c.cacheDir, nameParts[0])
-		metadataPath := filepath.Join(c.cacheDir, file.Name())
-
-		newCache := newEmptyCacheItem(cachePath, metadataPath)
-		err := newCache.ReadFS()
+		err := cache.PersistToFS()
 		if err != nil {
 			return err
 		}
-		c.caches[newCache.path] = newCache
 	}
-
-	//populate dependents for each cache item now that all caches have been read
-	for _, cache := range c.caches {
-		for dependentPath := range cache.dependents {
-			_, ok := c.caches[dependentPath]
-			if !ok {
-				return fmt.Errorf(
-					`unable to create cache dependency tree because cache with path "%s" doesnt' exist'`,
-					dependentPath,
-				)
-			}
-			cache.dependents[dependentPath] = c.caches[dependentPath]
-		}
-	}
-
-	var cachesPathsToRemove []string
-	//verify caches are not stale. if they are, invalidate it and its dependent tree
-	for _, cache := range c.caches {
-		if !cache.IsValid() {
-			err := cache.Invalidate()
-			if err != nil {
-				return err
-			}
-			cachesPathsToRemove = append(cachesPathsToRemove, cache.path)
-		}
-	}
-
-	//remove stale caches
-	for _, path := range cachesPathsToRemove {
-		delete(c.caches, path)
-	}
-
 	return nil
 }
 
 //GetContent returns the cached content if it exists, else it returns nil
 func (c *cacheManager) GetContent(path string) *string {
-	c.Lock()
-	defer c.Unlock()
+	c.RLock()
+	defer c.RUnlock()
 
 	cache, ok := c.caches[path]
 	if !ok {
@@ -457,7 +411,8 @@ func (c *cacheManager) Invalidate(path string) error {
 
 	cache, ok := c.caches[path]
 	if !ok {
-		return fmt.Errorf(`expected cache for "%s" to exist`, path)
+		//ignore if cache doesn't exist
+		return nil
 	}
 
 	err := cache.Invalidate()
@@ -466,6 +421,71 @@ func (c *cacheManager) Invalidate(path string) error {
 	}
 
 	delete(c.caches, path)
+
+	return nil
+}
+
+func (c *cacheManager) readCacheDir() error {
+	files, err := os.ReadDir(c.cacheDir)
+	if err != nil {
+		return err
+	}
+
+	//read all cached content
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		if filepath.Ext(file.Name()) != ".metadata" {
+			continue
+		}
+
+		nameParts := strings.Split(file.Name(), ".")
+		if len(nameParts) != 2 {
+			continue
+		}
+
+		cachePath := filepath.Join(c.cacheDir, nameParts[0]) + ".cache"
+		metadataPath := filepath.Join(c.cacheDir, file.Name())
+
+		newCache := newEmptyCacheItem(cachePath, metadataPath)
+		err := newCache.ReadFS()
+		if err != nil {
+			return err
+		}
+		c.caches[newCache.path] = newCache
+	}
+
+	//populate dependents for each cache item now that all caches have been read
+	for _, cache := range c.caches {
+		for dependentPath := range cache.dependents {
+			_, ok := c.caches[dependentPath]
+			if !ok {
+				return fmt.Errorf(
+					`unable to create cache dependency tree because cache with path "%s" doesnt' exist'`,
+					dependentPath,
+				)
+			}
+			cache.dependents[dependentPath] = c.caches[dependentPath]
+		}
+	}
+
+	var cachesPathsToRemove []string
+	//verify caches are not stale. if they are, invalidate it and its dependent tree
+	for _, cache := range c.caches {
+		if !cache.IsValid() {
+			err := cache.Invalidate()
+			if err != nil {
+				return err
+			}
+			cachesPathsToRemove = append(cachesPathsToRemove, cache.path)
+		}
+	}
+
+	//remove stale caches
+	for _, path := range cachesPathsToRemove {
+		delete(c.caches, path)
+	}
 
 	return nil
 }

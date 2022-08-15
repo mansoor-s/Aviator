@@ -119,13 +119,14 @@ type SvelteCompilerFunc func(string, []byte) (*SvelteBuildOutput, error)
 // composes all Svelte Components with all the layouts that apply to them
 // i.e:  <RootLayout><FooLayout><MyComponent></MyComponent></FooLayout></RootLayout>
 func wrappedComponentsPlugin(
+	cache *cacheManager,
 	workingDir string,
-	viewManager *ViewManagerOld,
+	allViews []*View,
 	compilerFunc SvelteCompilerFunc,
 ) esbuild.Plugin {
 	//index views by their WrappedUniqueName for easier lookup in plugin
 	viewsByWrappedName := make(map[string]*View)
-	for _, view := range viewManager.AllViews() {
+	for _, view := range allViews {
 		viewsByWrappedName[view.WrappedUniqueName] = view
 	}
 
@@ -145,33 +146,42 @@ func wrappedComponentsPlugin(
 			epb.OnLoad(
 				esbuild.OnLoadOptions{Filter: `.*`, Namespace: "wrappedComponents"},
 				func(args esbuild.OnLoadArgs) (result esbuild.OnLoadResult, err error) {
+					var contents *string
 
-					//get the wrapped unique name by removing the extension
-					wrappedName := args.Path
-					fileExt := filepath.Ext(args.Path)
-					if len(fileExt) > 0 {
-						wrappedName = wrappedName[:len(wrappedName)-len(fileExt)]
+					cachedContent := cache.GetContent(args.Path)
+
+					//cache miss
+					if cachedContent == nil {
+						fmt.Printf(`Cache miss on file: %s\n`, args.Path)
+						//get the wrapped unique name by removing the extension
+						wrappedName := args.Path
+						fileExt := filepath.Ext(args.Path)
+						if len(fileExt) > 0 {
+							wrappedName = wrappedName[:len(wrappedName)-len(fileExt)]
+						}
+
+						view, ok := viewsByWrappedName[wrappedName]
+						if !ok {
+							return result, fmt.Errorf(
+								"unable to find wrapped component named: %s", wrappedName,
+							)
+						}
+
+						rawVirtualCode := createLayoutWrappedView(view)
+
+						compiledCode, err := compilerFunc(args.Path, []byte(rawVirtualCode))
+						if err != nil {
+							return result, err
+						}
+
+						contents = &compiledCode.JSCode
+						cache.AddCache(args.Path, contents)
+					} else {
+						contents = cachedContent
 					}
 
-					view, ok := viewsByWrappedName[wrappedName]
-					if !ok {
-						return result, fmt.Errorf(
-							"unable to find wrapped component named: %s", wrappedName,
-						)
-					}
-
-					rawVirtualCode := createLayoutWrappedView(view)
-
-					compiledCode, err := compilerFunc(args.Path, []byte(rawVirtualCode))
-					if err != nil {
-						return result, err
-					}
-
-					contents := compiledCode.JSCode /* +
-					`//# sourceMappingURL=` +
-					compiledCode.JSSourceMap*/
 					result.ResolveDir = workingDir
-					result.Contents = &contents
+					result.Contents = contents
 					result.Loader = esbuild.LoaderJSX
 					return result, nil
 				},
@@ -182,6 +192,7 @@ func wrappedComponentsPlugin(
 
 //svelteComponentsPlugin handles .svelte files both inside the project and node_modules
 func svelteComponentsPlugin(
+	cache *cacheManager,
 	workingDir string,
 	compilerFunc SvelteCompilerFunc,
 ) esbuild.Plugin {
@@ -210,24 +221,33 @@ func svelteComponentsPlugin(
 			epb.OnLoad(
 				esbuild.OnLoadOptions{Filter: `.*`, Namespace: "svelte"},
 				func(args esbuild.OnLoadArgs) (result esbuild.OnLoadResult, err error) {
+					var contents *string
 
-					rawCode, err := os.ReadFile(args.Path)
-					if err != nil {
-						return result, err
+					cachedContent := cache.GetContent(args.Path)
+					//cache miss
+					if cachedContent == nil {
+						rawCode, err := os.ReadFile(args.Path)
+						if err != nil {
+							return result, err
+						}
+
+						newPath := utils.PathPascalCase(filepath.Base(args.Path))
+
+						compiledCode, err := compilerFunc(newPath, rawCode)
+						if err != nil {
+							return result, err
+						}
+						contents = &compiledCode.JSCode
+						cache.AddCache(args.Path, &compiledCode.JSCode)
+					} else {
+						contents = cachedContent
 					}
 
-					newPath := utils.PathPascalCase(filepath.Base(args.Path))
-
-					compiledCode, err := compilerFunc(newPath, rawCode)
-					if err != nil {
-						return result, err
-					}
-
-					contents := compiledCode.JSCode /* +
+					/*contents := compiledCode.JSCode  +
 					`//# sourceMappingURL=` +
 					compiledCode.JSSourceMap*/
 					result.ResolveDir = workingDir
-					result.Contents = &contents
+					result.Contents = contents
 					result.Loader = esbuild.LoaderJSX
 					return result, nil
 				},

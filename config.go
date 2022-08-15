@@ -5,14 +5,10 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/mansoor-s/aviator/builder"
 	"github.com/mansoor-s/aviator/js"
+	"github.com/mansoor-s/aviator/utils"
 	"sync"
 	"text/template"
 )
-
-type Logger interface {
-	Info(string)
-	Error(string)
-}
 
 type Option func(config *Aviator)
 
@@ -23,9 +19,9 @@ type Aviator struct {
 	vm             js.VM
 	ssrBuilder     *builder.SSRBuilder
 	browserBuilder *builder.BrowserBuilder
-	viewManager    *builder.ViewManagerOld
+	viewManager    *builder.ViewManager
 	watcher        *fsnotify.Watcher
-	logger         Logger
+	logger         utils.Logger
 
 	assetListenPath  string
 	staticAssetRoute string
@@ -40,6 +36,7 @@ type Aviator struct {
 
 	viewsPath  string
 	outputPath string
+	cacheDir   string
 
 	// TODO: optimize by removing this lock for non-dev environment
 	viewLock sync.RWMutex
@@ -85,7 +82,7 @@ func WithHTMLLang(lang string) Option {
 	}
 }
 
-func WithLogger(l Logger) Option {
+func WithLogger(l utils.Logger) Option {
 	return func(a *Aviator) {
 		a.logger = l
 	}

@@ -31,7 +31,7 @@ func main() {
 
 	err = a.Init()
 	if err != nil {
-		panic(err)
+		panic(err.Error())
 	}
 
 	// Echo instance
@@ -54,13 +54,6 @@ func main() {
 		}
 		rendered, err := a.Render(c.Request().Context(), "index.svelte", props)
 		if err != nil {
-			/*errStr := ""
-			jsErr, ok := err.(aviator.JSError)
-			if ok {
-				errStr = jsErr.StackTrace()
-			} else {
-				errStr = err.Error()
-			}*/
 			return c.String(http.StatusOK, err.Error())
 		}
 
@@ -75,13 +68,7 @@ func main() {
 		}
 		rendered, err := a.Render(c.Request().Context(), "frog/tiger.svelte", props)
 		if err != nil {
-			/*errStr := ""
-			jsErr, ok := err.(aviator.JSError)
-			if ok {
-				errStr = jsErr.StackTrace()
-			} else {
-				errStr = err.Error()
-			}*/
+
 			return c.String(http.StatusOK, err.Error())
 		}
 

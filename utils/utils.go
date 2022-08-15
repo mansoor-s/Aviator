@@ -9,6 +9,11 @@ import (
 	"strings"
 )
 
+type Logger interface {
+	Info(string)
+	Error(string)
+}
+
 const caseDelimiters = `[^a-zA-Z0-9]+`
 
 var caseDelimitersRegexp = regexp.MustCompile(caseDelimiters)
