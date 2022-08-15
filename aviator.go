@@ -165,7 +165,7 @@ func (a *Aviator) rebuildViews() error {
 		return err
 	}
 
-	a.viewManager = builder.NewViewManager(a.componentTree)
+	a.viewManager = builder.NewViewManagerOld(a.componentTree)
 
 	a.ssrBuilder = builder.NewSSRBuilder(a.vm, a.viewManager, a.viewsPath)
 

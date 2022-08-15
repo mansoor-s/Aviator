@@ -32,17 +32,17 @@ func TestCacheItem_Persistence(t *testing.T) {
 
 	assert.Len(t, files, 2)
 
-	expectedCacheFileName := filepath.Join(cacheDir, item.hash+".svelte")
+	expectedCacheFileName := filepath.Join(cacheDir, item.cachedContentHash+".cache")
 	assert.FileExists(t, expectedCacheFileName)
 
-	expectedMetadataFileName := filepath.Join(cacheDir, item.hash+".metadata")
+	expectedMetadataFileName := filepath.Join(cacheDir, item.cachedContentHash+".metadata")
 	assert.FileExists(t, expectedMetadataFileName)
 
 	metadataContent, err := os.ReadFile(expectedMetadataFileName)
 	assert.NoError(t, err)
 
 	metadataContentStr := string(metadataContent)
-	format := `{"Path":"%s","Dependents":["%s"]}`
+	format := `{"Path":"%s","Dependents":["%s"],"PathContentHash":""}`
 	expectedMetadata := fmt.Sprintf(format, testPath, testDependentPath)
 	assert.Equal(t, expectedMetadata, metadataContentStr)
 

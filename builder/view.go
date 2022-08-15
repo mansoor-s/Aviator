@@ -1,6 +1,10 @@
 package builder
 
-import "github.com/mansoor-s/aviator/utils"
+import (
+	"github.com/mansoor-s/aviator/utils"
+	"path/filepath"
+	"unicode"
+)
 
 // View objects are passed to the go-template file responsible for creating the virtual __aviator_ssr.js file
 // in the SSR Plugin
@@ -27,6 +31,10 @@ type View struct {
 
 	IsLayout bool
 
+	//If the view is a svelte Component and starts with a capital letter, it will be
+	//treated as an entrypoint for both SSR and Browser JS
+	IsEntrypoint bool
+
 	//ApplicableLayouts is a slice of Views that represent layouts that apply to this
 	//view. Lower index means the layout is closer to this view in the ancestral hierarchy
 	ApplicableLayoutViews []*View
@@ -41,8 +49,8 @@ type View struct {
 
 	//TODO: when Browser building is finished.
 	//These are only used in dev mode
-	ClientJS  string
-	ClientCSS string
+	//ClientJS  string
+	//ClientCSS string
 }
 
 func (v *View) getApplicableLayouts() []*Layout {
@@ -57,6 +65,13 @@ func (v *View) getApplicableLayouts() []*Layout {
 }
 
 func newViewFromComponent(c *Component) *View {
+	fileName := filepath.Base(c.Path)
+	firstRune := []rune(fileName)[0]
+	var isEntrypoint bool
+	if unicode.IsUpper(firstRune) && unicode.IsLetter(firstRune) {
+		isEntrypoint = true
+	}
+
 	uniqueName := utils.PathPascalCase(c.RelativePath())
 	return &View{
 		Path:              c.Path,
@@ -66,6 +81,7 @@ func newViewFromComponent(c *Component) *View {
 		ComponentName:     c.Name,
 		Component:         c,
 		Layout:            c.Layout,
+		IsEntrypoint:      isEntrypoint,
 	}
 }
 
@@ -80,53 +96,4 @@ func newViewFromLayout(l *Layout) *View {
 		Layout:            l,
 		IsLayout:          true,
 	}
-}
-
-//ViewManagerOld stores views and fetches them during build and render time
-type ViewManagerOld struct {
-	views map[string]*View
-}
-
-func NewViewManager(tree ComponentTree) *ViewManagerOld {
-	views := make(map[string]*View)
-	for _, component := range tree.GetAllComponents() {
-		view := newViewFromComponent(component)
-		view.applicableLayouts = component.ApplicableLayouts()
-		views[component.RelativePath()] = view
-	}
-
-	for _, layout := range tree.GetAllLayouts() {
-		view := newViewFromLayout(layout)
-		view.applicableLayouts = layout.ApplicableLayouts()
-		views[layout.RelativePath()] = view
-	}
-
-	for _, view := range views {
-		layouts := view.getApplicableLayouts()
-		var layoutViews []*View
-		for _, layout := range layouts {
-			layoutViews = append(layoutViews, views[layout.RelativePath()])
-		}
-		//view.applicableLayouts = nil
-		view.ApplicableLayoutViews = layoutViews
-	}
-
-	return &ViewManagerOld{
-		views: views,
-	}
-}
-
-//ViewByRelPath returns a view by the relative Path
-func (v *ViewManagerOld) ViewByRelPath(path string) *View {
-	view, _ := v.views[path]
-	return view
-}
-
-//AllViews returns all views
-func (v *ViewManagerOld) AllViews() []*View {
-	var views []*View
-	for _, view := range v.views {
-		views = append(views, view)
-	}
-	return views
 }

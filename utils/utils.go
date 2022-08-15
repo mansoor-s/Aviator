@@ -64,3 +64,29 @@ func RemoveDirContents(dir string) error {
 	}
 	return nil
 }
+
+func RecursivelyGetAllChildDirs(path string) ([]string, error) {
+	var childDirs []string
+
+	dirs, err := os.ReadDir(path)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, dir := range dirs {
+		if !dir.IsDir() {
+			continue
+		}
+
+		childPath := filepath.Join(path, dir.Name())
+		childDirs = append(childDirs, childPath)
+
+		childsDescendants, err := RecursivelyGetAllChildDirs(childPath)
+		if err != nil {
+			return nil, err
+		}
+		childDirs = append(childDirs, childsDescendants...)
+	}
+
+	return childDirs, nil
+}

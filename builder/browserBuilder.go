@@ -20,7 +20,7 @@ type BrowserImports struct {
 
 type BrowserBuilder struct {
 	vm          js.VM
-	viewManager *ViewManagerOld
+	viewManager *viewManager
 	buildResult esbuild.BuildResult
 
 	outputDir  string
@@ -29,7 +29,7 @@ type BrowserBuilder struct {
 
 func NewBrowserBuilder(
 	vm js.VM,
-	viewManager *ViewManagerOld,
+	viewManager *viewManager,
 	workingDir, outputDir string,
 ) *BrowserBuilder {
 	return &BrowserBuilder{
@@ -54,11 +54,12 @@ func (b *BrowserBuilder) BuildDev(_ context.Context) error {
 	var entryPoints []esbuild.EntryPoint
 
 	for _, view := range views {
+		//TODO: for testing. remove me
 		if view.ComponentName != "Index" {
 			//continue
 		}
-		//skip layouts as entrypoints
-		if view.IsLayout {
+
+		if !view.IsEntrypoint {
 			continue
 		}
 

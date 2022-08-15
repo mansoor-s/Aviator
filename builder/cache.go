@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -18,7 +19,7 @@ import (
 cacheManager manages cached assets needed by SSRBuilder and BrowserBuilder.
 1 instance is created for SSR and 1 is created for Browser builds
 
-It maintains a dependency graph of .svelte files in both the project and node_packages
+It maintains a dependency graph of .svelte files in the project
 
 It will Invalidate all caches for dependants of a changed asset
 
@@ -54,12 +55,15 @@ const (
 type cacheItem struct {
 	cacheType int
 
-	cacheDir string
-	content  *string
+	cacheDir          string
+	content           *string
+	cachedContentHash string
+
+	//pathContentHash is the hash of the actual file at path, not the compiled content
+	pathContentHash string
 
 	//path refers to the original absolute path of the file we're holding a cache for
 	path string
-	hash string
 
 	cacheFilePath    string
 	metadataFilePath string
@@ -76,6 +80,18 @@ type cacheItem struct {
 type cacheItemMetadata struct {
 	Path       string
 	Dependents []string
+	//PathContentHash is the hash of the actual file at path
+	PathContentHash string
+}
+
+func newEmptyCacheItem(cacheFilePath, metadataFilePath string) *cacheItem {
+	c := &cacheItem{
+		dependents:       map[string]*cacheItem{},
+		cacheFilePath:    cacheFilePath,
+		metadataFilePath: metadataFilePath,
+	}
+
+	return c
 }
 
 func newCacheItem(cacheDir, path string, content *string) *cacheItem {
@@ -90,12 +106,79 @@ func newCacheItem(cacheDir, path string, content *string) *cacheItem {
 
 	h := sha1.New()
 	io.WriteString(h, *content)
-	c.hash = hex.EncodeToString(h.Sum(nil))[:20]
+	c.cachedContentHash = hex.EncodeToString(h.Sum(nil))[:20]
 
-	c.cacheFilePath = filepath.Join(c.cacheDir, c.hash+".svelte")
-	c.metadataFilePath = filepath.Join(c.cacheDir, c.hash+".metadata")
+	c.cacheFilePath = filepath.Join(c.cacheDir, c.cachedContentHash+".cache")
+	c.metadataFilePath = filepath.Join(c.cacheDir, c.cachedContentHash+".metadata")
+	c.pathContentHash = c.pathFileHash()
 
 	return c
+}
+
+//IsValid checks to see if cache is not stale by re-hashing the contents
+//of the underlying file
+func (c *cacheItem) IsValid() bool {
+	return c.pathFileHash() == c.pathContentHash
+}
+
+func (c *cacheItem) pathFileHash() string {
+	fileContent, err := os.ReadFile(c.path)
+	//silently return on error if the file is a "virtual" file
+	if err != nil {
+		return ""
+	}
+
+	h := sha1.New()
+	h.Write(fileContent)
+
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func (c *cacheItem) readMetadataFile() error {
+	fileContent, err := os.ReadFile(c.metadataFilePath)
+	if err != nil {
+		return err
+	}
+
+	metadata := &cacheItemMetadata{}
+
+	err = json.Unmarshal(fileContent, metadata)
+	if err != nil {
+		return err
+	}
+
+	c.path = metadata.Path
+	c.pathContentHash = c.pathFileHash()
+
+	for _, dependentPath := range metadata.Dependents {
+		// for this stage, just create the record. cacheManger will handle adding the
+		//correct reference when all caches are read from FS
+		c.dependents[dependentPath] = nil
+	}
+
+	return nil
+}
+
+func (c *cacheItem) readCacheFile() error {
+	fileContent, err := os.ReadFile(c.metadataFilePath)
+	if err != nil {
+		return err
+	}
+
+	contentStr := string(fileContent)
+	c.content = &contentStr
+
+	return nil
+}
+
+func (c *cacheItem) ReadFS() error {
+	err := c.readMetadataFile()
+	if err != nil {
+		return err
+	}
+
+	return c.readMetadataFile()
+
 }
 
 func (c *cacheItem) writeCacheFile() error {
@@ -127,8 +210,9 @@ func (c *cacheItem) writeMetadataFile() error {
 	}
 
 	metadata := cacheItemMetadata{
-		Path:       c.path,
-		Dependents: dependents,
+		Path:            c.path,
+		Dependents:      dependents,
+		PathContentHash: c.pathContentHash,
 	}
 	metadataJson, err := json.Marshal(metadata)
 	if err != nil {
@@ -226,10 +310,12 @@ func newCacheManager(cacheType int, cacheDir string) (*cacheManager, error) {
 		cacheItemDependent: map[string][]*cacheItem{},
 	}
 
+	var skipReadingFromCache bool
 	//create cache dir if it doesn't exist
 	_, err := os.Stat(c.cacheDir)
 	if errors.Is(err, os.ErrNotExist) {
 		err := os.MkdirAll(c.cacheDir, os.ModePerm)
+		skipReadingFromCache = true
 		if err != nil {
 			return nil, err
 		}
@@ -237,7 +323,79 @@ func newCacheManager(cacheType int, cacheDir string) (*cacheManager, error) {
 		return nil, err
 	}
 
+	if !skipReadingFromCache {
+		err = c.readCacheDir()
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return c, nil
+}
+
+func (c *cacheManager) readCacheDir() error {
+	files, err := os.ReadDir(c.cacheDir)
+	if err != nil {
+		return err
+	}
+
+	//read all cached content
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		if filepath.Ext(file.Name()) != ".metadata" {
+			continue
+		}
+
+		nameParts := strings.Split(file.Name(), ".")
+		if len(nameParts) != 2 {
+			continue
+		}
+
+		cachePath := filepath.Join(c.cacheDir, nameParts[0])
+		metadataPath := filepath.Join(c.cacheDir, file.Name())
+
+		newCache := newEmptyCacheItem(cachePath, metadataPath)
+		err := newCache.ReadFS()
+		if err != nil {
+			return err
+		}
+		c.caches[newCache.path] = newCache
+	}
+
+	//populate dependents for each cache item now that all caches have been read
+	for _, cache := range c.caches {
+		for dependentPath := range cache.dependents {
+			_, ok := c.caches[dependentPath]
+			if !ok {
+				return fmt.Errorf(
+					`unable to create cache dependency tree because cache with path "%s" doesnt' exist'`,
+					dependentPath,
+				)
+			}
+			cache.dependents[dependentPath] = c.caches[dependentPath]
+		}
+	}
+
+	var cachesPathsToRemove []string
+	//verify caches are not stale. if they are, invalidate it and its dependent tree
+	for _, cache := range c.caches {
+		if !cache.IsValid() {
+			err := cache.Invalidate()
+			if err != nil {
+				return err
+			}
+			cachesPathsToRemove = append(cachesPathsToRemove, cache.path)
+		}
+	}
+
+	//remove stale caches
+	for _, path := range cachesPathsToRemove {
+		delete(c.caches, path)
+	}
+
+	return nil
 }
 
 //GetContent returns the cached content if it exists, else it returns nil

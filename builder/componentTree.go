@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"fmt"
 	"github.com/mansoor-s/aviator/utils"
 	"os"
 	"path/filepath"
@@ -122,9 +123,9 @@ type componentTree struct {
 	//absolute path
 	path string
 
-	Components []*Component
+	Components map[string]*Component //[]*Component
 	Layouts    map[string]*Layout
-	Children   []*componentTree
+	Children   map[string]*componentTree //[]*componentTree
 
 	Parent *componentTree
 
@@ -141,8 +142,11 @@ func CreateComponentTree(path string) (*componentTree, error) {
 
 func createComponentTree(parentTree *componentTree, path string) (*componentTree, error) {
 	tree := &componentTree{
-		path:   path,
-		Parent: parentTree,
+		path:       path,
+		Parent:     parentTree,
+		Components: make(map[string]*Component),
+		Layouts:    make(map[string]*Layout),
+		Children:   make(map[string]*componentTree),
 	}
 
 	if parentTree != nil {
@@ -151,31 +155,43 @@ func createComponentTree(parentTree *componentTree, path string) (*componentTree
 		tree.rootTree = tree
 	}
 
-	// first find all +layouts
-	err := tree.findLayouts()
-	if err != nil {
-		return nil, err
-	}
-
-	//resolve +layout parents if any
-	tree.resolveLayoutParents()
-
-	// find all component at current Path
-	err = tree.findComponents()
-	if err != nil {
-		return nil, err
-	}
-
-	// resolve layouts for components
-	tree.resolveComponentLayouts()
-
-	//walk through child directories to find layouts and components
-	err = tree.findChildTrees()
+	err := tree.ReScan()
 	if err != nil {
 		return nil, err
 	}
 
 	return tree, nil
+}
+
+//ReScan forces the componentTree to rescan it's children and child components and layouts
+//starting only at the directory depth associated with this tree
+//ReScan will NOT walk down to child trees
+func (c *componentTree) ReScan() error {
+	// first find all +layouts
+	err := c.findLayouts()
+	if err != nil {
+		return err
+	}
+
+	//resolve +layout parents if any
+	c.resolveLayoutParents()
+
+	// find all component at current Path
+	err = c.findComponents()
+	if err != nil {
+		return err
+	}
+
+	// resolve layouts for components
+	c.resolveComponentLayouts()
+
+	//walk through child directories to find layouts and components
+	err = c.findChildTrees()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (c *componentTree) Path() string {
@@ -184,7 +200,11 @@ func (c *componentTree) Path() string {
 
 // GetAllComponents returns all components at this tree level and child levels
 func (c *componentTree) GetAllComponents() []*Component {
-	components := c.Components
+	var components []*Component
+
+	for _, component := range c.Components {
+		components = append(components, component)
+	}
 
 	for _, childTree := range c.Children {
 		components = append(components, childTree.GetAllComponents()...)
@@ -223,15 +243,33 @@ func (c *componentTree) GetAllDescendantPaths() []string {
 	return paths
 }
 
-//findChildTrees walks through all child directories and recursively
-// creates a componentTree for each
-func (c *componentTree) findChildTrees() error {
-	var children []*componentTree
+// GetAllDescendentTrees returns all descendent trees starting from this tree level
+// No order guarantees
+func (c *componentTree) GetAllDescendentTrees() map[string]*componentTree {
+	descendents := map[string]*componentTree{
+		c.Path(): c,
+	}
 
+	for _, childTree := range c.Children {
+		descendents[childTree.path] = childTree
+		childDescendents := childTree.GetAllDescendentTrees()
+		for _, tree := range childDescendents {
+			descendents[tree.path] = tree
+		}
+	}
+
+	return descendents
+}
+
+//findChildTrees walks through all child directories and recursively
+// creates a componentTree for each if one doesn't exist
+func (c *componentTree) findChildTrees() error {
 	dirs, err := os.ReadDir(c.path)
 	if err != nil {
 		return err
 	}
+
+	var childDirsInPath []string
 
 	for _, dir := range dirs {
 		if !dir.IsDir() {
@@ -243,14 +281,26 @@ func (c *componentTree) findChildTrees() error {
 			continue
 		}
 
-		child, err := createComponentTree(c, filepath.Join(c.path, dir.Name()))
+		childPath := filepath.Join(c.path, dir.Name())
+		childDirsInPath = append(childDirsInPath, childPath)
+
+		//skip if child already exists
+		_, ok := c.Children[childPath]
+		if ok {
+			continue
+		}
+
+		child, err := createComponentTree(c, childPath)
 		if err != nil {
 			return err
 		}
-		children = append(children, child)
+		c.Children[childPath] = child
 	}
 
-	c.Children = children
+	//remove child trees that have been removed on the FS
+	for _, path := range childDirsInPath {
+		delete(c.Children, path)
+	}
 
 	return nil
 }
@@ -276,7 +326,7 @@ func (c *componentTree) findComponents() error {
 		return err
 	}
 
-	var components []*Component
+	var componentsInDir []string
 
 	for _, file := range files {
 		if file.IsDir() {
@@ -294,15 +344,25 @@ func (c *componentTree) findComponents() error {
 		}
 
 		componentName, layoutName := getComponentWithLayoutName(file.Name())
-		components = append(components, &Component{
+		//skip if it was already added
+		_, ok := c.Components[componentName]
+		if ok {
+			continue
+		}
+		componentsInDir = append(componentsInDir, componentName)
+		c.Components[componentName] = &Component{
 			Name:       utils.PascalCase(componentName),
 			Path:       filepath.Join(c.path, file.Name()),
 			layoutName: layoutName,
 			ParentTree: c,
 			rootTree:   c.rootTree,
-		})
+		}
 	}
-	c.Components = components
+
+	//remove stale components that are no longer in the FS
+	for _, componentName := range componentsInDir {
+		delete(c.Layouts, componentName)
+	}
 
 	return nil
 }
@@ -314,7 +374,7 @@ func (c *componentTree) findLayouts() error {
 		return err
 	}
 
-	layouts := make(map[string]*Layout)
+	var layoutsInDir []string
 
 	for _, file := range files {
 		if file.IsDir() {
@@ -326,7 +386,14 @@ func (c *componentTree) findLayouts() error {
 		}
 
 		layoutName, layoutParent := getLayoutInfo(file.Name())
-		layouts[layoutName] = &Layout{
+		//if layout already exists, skip it
+		_, ok := c.Layouts[layoutName]
+		if ok {
+			continue
+		}
+
+		layoutsInDir = append(layoutsInDir, layoutName)
+		c.Layouts[layoutName] = &Layout{
 			Name:             layoutName,
 			Path:             filepath.Join(c.path, file.Name()),
 			parentLayoutName: layoutParent,
@@ -335,7 +402,10 @@ func (c *componentTree) findLayouts() error {
 		}
 	}
 
-	c.Layouts = layouts
+	//remove stale layouts that are no longer in the FS
+	for _, layoutName := range layoutsInDir {
+		delete(c.Layouts, layoutName)
+	}
 
 	return nil
 }
@@ -400,3 +470,49 @@ func (c *componentTree) resolveLayoutParents() {
 		layout.ParentLayout = c.ResolveLayoutByName(layout.parentLayoutName)
 	}
 }
+
+//RescanDir rescans the path to add / remove files and directories
+// if path is a file, it will just look at the directory portion of the path
+func (c *componentTree) RescanDir(path string) error {
+	allTrees := c.GetAllDescendentTrees()
+
+	parentDir := filepath.Dir(path)
+	parentTree, ok := allTrees[parentDir]
+	if !ok {
+		return fmt.Errorf(
+			`unable to add dir at path "%s" because parent directory was not present in component tree'`,
+			parentDir,
+		)
+	}
+
+	return parentTree.ReScan()
+}
+
+/*
+func (c *componentTree) RescanDir(path string) error {
+	allTrees := c.GetAllDescendentTrees()
+
+	//noop if a tree already exists for this dir
+	_, ok := allTrees[path]
+	if ok {
+		return nil
+	}
+
+	parentDir := filepath.Dir(path)
+	parentTree, ok := allTrees[parentDir]
+	if !ok {
+		return fmt.Errorf(
+			`unable to add dir at path "%s" because parent directory was not present in component tree'`,
+			parentDir,
+		)
+	}
+
+	newTree, err := createComponentTree(parentTree, path)
+	if err != nil {
+		return err
+	}
+
+	parentTree.Children[newTree.path] = newTree
+	return nil
+}
+*/
