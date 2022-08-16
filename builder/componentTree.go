@@ -269,7 +269,7 @@ func (c *componentTree) findChildTrees() error {
 		return err
 	}
 
-	var childDirsInPath []string
+	childDirsInPath := map[string]struct{}{}
 
 	for _, dir := range dirs {
 		if !dir.IsDir() {
@@ -282,7 +282,7 @@ func (c *componentTree) findChildTrees() error {
 		}
 
 		childPath := filepath.Join(c.path, dir.Name())
-		childDirsInPath = append(childDirsInPath, childPath)
+		childDirsInPath[childPath] = struct{}{}
 
 		//skip if child already exists
 		_, ok := c.Children[childPath]
@@ -298,8 +298,11 @@ func (c *componentTree) findChildTrees() error {
 	}
 
 	//remove child trees that have been removed on the FS
-	for _, path := range childDirsInPath {
-		delete(c.Children, path)
+	for _, child := range c.Children {
+		_, ok := childDirsInPath[child.path]
+		if !ok {
+			delete(c.Children, child.path)
+		}
 	}
 
 	return nil
@@ -487,32 +490,3 @@ func (c *componentTree) RescanDir(path string) error {
 
 	return parentTree.ReScan()
 }
-
-/*
-func (c *componentTree) RescanDir(path string) error {
-	allTrees := c.GetAllDescendentTrees()
-
-	//noop if a tree already exists for this dir
-	_, ok := allTrees[path]
-	if ok {
-		return nil
-	}
-
-	parentDir := filepath.Dir(path)
-	parentTree, ok := allTrees[parentDir]
-	if !ok {
-		return fmt.Errorf(
-			`unable to add dir at path "%s" because parent directory was not present in component tree'`,
-			parentDir,
-		)
-	}
-
-	newTree, err := createComponentTree(parentTree, path)
-	if err != nil {
-		return err
-	}
-
-	parentTree.Children[newTree.path] = newTree
-	return nil
-}
-*/

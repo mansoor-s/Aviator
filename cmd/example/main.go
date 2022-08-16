@@ -25,8 +25,8 @@ func main() {
 		aviator.WithViewsPath(viewsAbsPath),
 		aviator.WithAssetOutputPath(assetOutputAbsPath),
 		aviator.WithDevMode(true),
-		aviator.WithNumJsVMs(30),
-		aviator.WithStaticAssetRoute("/bundled_assets"),
+		aviator.WithNumJsVMs(8),
+		aviator.WithStaticAssetRoute("/public/assets/"),
 	)
 
 	err = a.Init()
@@ -52,7 +52,7 @@ func main() {
 		}{
 			Myprop: "My Prop Value",
 		}
-		rendered, err := a.Render(c.Request().Context(), "index.svelte", props)
+		rendered, err := a.Render(c.Request().Context(), "Index.svelte", props)
 		if err != nil {
 			return c.String(http.StatusOK, err.Error())
 		}
@@ -75,14 +75,14 @@ func main() {
 		return c.HTML(http.StatusOK, rendered)
 	})
 
-	assetHandler := a.DynamicAssetHandler("/public/assets/")
-
 	e.GET("/public/assets/:asset", func(e echo.Context) error {
-		assetHandler(e.Response(), e.Request())
-		return nil
+		asset, mime, found := a.GetStaticAsset(e.Param("asset"))
+		if found {
+			return e.Blob(http.StatusOK, mime, asset)
+		}
+		return e.String(http.StatusNotFound, "not found!")
 	})
 
 	// Start server
 	e.Logger.Fatal(e.Start(":1323"))
-	a.Close()
 }

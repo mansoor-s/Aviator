@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 )
 
@@ -51,17 +52,22 @@ type ViewManager struct {
 	tree      *componentTree
 	vm        js.VM
 
+	htmlGenerator *template.Template
+
 	//ssrCacheManager     *cacheManager
 	//browserCacheManager *cacheManager
-	watcher *watcher.Batcher
-	views   map[string]*View
+	watcher       *watcher.Batcher
+	views         map[string]*View
+	staticContent map[string]StaticAsset
 
 	ssrCache     *cacheManager
 	browserCache *cacheManager
 
-	browserBuilder *BrowserBuilder
-	ssrBuilder     *SSRBuilder
-	logger         utils.Logger
+	browserBuilder    *BrowserBuilder
+	ssrBuilder        *SSRBuilder
+	logger            utils.Logger
+	staticAssetsRoute string
+	htmlLang          string
 
 	sync.Mutex
 }
@@ -70,9 +76,12 @@ func NewViewManager(
 	logger utils.Logger,
 	vm js.VM,
 	tree ComponentTree,
+	htmlGenerator *template.Template,
 	isDevMode bool,
 	cacheDir string,
 	viewsDir string,
+	staticAssetsRoute string,
+	htmlLang string,
 ) (*ViewManager, error) {
 	viewWatcher, err := watcher.New(eventBatchTime)
 	if err != nil {
@@ -92,20 +101,22 @@ func NewViewManager(
 	ssrBuilder := NewSSRBuilder(logger, vm, ssrCache, viewsDir)
 	browserBuilder := NewBrowserBuilder(logger, vm, browserCache, viewsDir)
 	v := &ViewManager{
-		vm:             vm,
-		logger:         logger,
-		watcher:        viewWatcher,
-		tree:           tree.(*componentTree),
-		isDevMode:      isDevMode,
-		browserBuilder: browserBuilder,
-		ssrBuilder:     ssrBuilder,
-		ssrCache:       ssrCache,
-		browserCache:   browserCache,
-		viewsDir:       viewsDir,
+		vm:                vm,
+		logger:            logger,
+		watcher:           viewWatcher,
+		tree:              tree.(*componentTree),
+		htmlGenerator:     htmlGenerator,
+		isDevMode:         isDevMode,
+		browserBuilder:    browserBuilder,
+		ssrBuilder:        ssrBuilder,
+		ssrCache:          ssrCache,
+		browserCache:      browserCache,
+		viewsDir:          viewsDir,
+		staticAssetsRoute: staticAssetsRoute,
+		htmlLang:          htmlLang,
 	}
 
 	v.refreshViews()
-
 	err = v.Build()
 
 	return v, err
@@ -114,11 +125,12 @@ func NewViewManager(
 func (v *ViewManager) Build() error {
 	allViews := v.AllViews()
 
-	err := v.browserBuilder.BuildDev(allViews)
+	staticContent, err := v.browserBuilder.BuildDev(allViews)
 	if err != nil {
 		v.logger.Error("error building SSR build: " + err.Error())
 		return err
 	}
+	v.staticContent = staticContent
 
 	err = v.browserCache.Persist()
 	if err != nil {
@@ -144,15 +156,6 @@ func (v *ViewManager) Build() error {
 	)
 
 	return err
-}
-
-func (v *ViewManager) Render(viewPath string) error {
-	view := v.ViewByRelPath(viewPath)
-	if view == nil {
-		return fmt.Errorf(`view in path "%s" not found`, viewPath)
-	}
-
-	return nil
 }
 
 func (v *ViewManager) refreshViews() {
@@ -201,7 +204,6 @@ func (v *ViewManager) StartWatch() error {
 	//fsnotify doesn't currently support watching a directory recursively, so we must
 	//manually watch each child directory here
 	for _, dirPath := range v.tree.GetAllDescendantPaths() {
-		v.logger.Info("Starting watch on dir: " + dirPath)
 		err := v.watcher.Add(dirPath)
 		if err != nil {
 			return err
@@ -239,10 +241,8 @@ func (v *ViewManager) handleEvents(events []fsnotify.Event) error {
 
 	numHandledEvents := 0
 	for _, e := range events {
-		v.logger.Info("Handling event")
 		//skip events on editor created temp files
 		if isTempFile(e.Name) || e.Name == "" {
-			v.logger.Info("Skipping temp file: " + e.Name)
 			continue
 		}
 
@@ -308,25 +308,17 @@ func (v *ViewManager) handleRenameEvent(e fsnotify.Event) error {
 }
 
 func (v *ViewManager) handleWriteEvent(e fsnotify.Event) error {
-	v.logger.Info("File updated: " + e.Name)
-	err := v.ssrCache.Invalidate(e.Name)
-	if err != nil {
-		return err
-	}
+	_ = v.ssrCache.Invalidate(e.Name)
 
-	return v.browserCache.Invalidate(e.Name)
+	_ = v.browserCache.Invalidate(e.Name)
+
+	return nil
 }
 
 func (v *ViewManager) handleRemoveEvent(e fsnotify.Event) error {
-	err := v.ssrCache.Invalidate(e.Name)
-	if err != nil {
-		return err
-	}
+	_ = v.ssrCache.Invalidate(e.Name)
 
-	err = v.browserCache.Invalidate(e.Name)
-	if err != nil {
-		return err
-	}
+	_ = v.browserCache.Invalidate(e.Name)
 
 	rescanPath := filepath.Base(e.Name)
 

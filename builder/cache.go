@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -292,10 +291,7 @@ type cacheManager struct {
 
 	caches map[string]*cacheItem
 
-	//temporary dependant storage for when the cache item doesn't exist yet,
-	//but it is being referenced by another cacheItem
-	//when the cacheItem is created, the dependants are moved there and cleared from here
-	cacheItemDependent map[string][]*cacheItem
+	dependencies map[string][]string
 
 	sync.RWMutex
 }
@@ -307,10 +303,10 @@ func newCacheManager(cacheType int, cacheDir string) (*cacheManager, error) {
 	}
 
 	c := &cacheManager{
-		cacheType:          cacheType,
-		cacheDir:           filepath.Join(cacheDir, cacheTypeStr),
-		caches:             map[string]*cacheItem{},
-		cacheItemDependent: map[string][]*cacheItem{},
+		cacheType:    cacheType,
+		cacheDir:     filepath.Join(cacheDir, cacheTypeStr),
+		caches:       map[string]*cacheItem{},
+		dependencies: map[string][]string{},
 	}
 
 	var skipReadingFromCache bool
@@ -334,6 +330,23 @@ func newCacheManager(cacheType int, cacheDir string) (*cacheManager, error) {
 	}
 
 	return c, nil
+}
+
+func (c *cacheManager) Finished() {
+	c.Lock()
+	defer c.Unlock()
+
+	for pathA := range c.dependencies {
+		for _, pathB := range c.dependencies[pathA] {
+			cacheB := c.caches[pathB]
+			cacheA := c.caches[pathA]
+			if cacheA == nil {
+				continue
+			}
+			cacheB.AddDependent(cacheA)
+		}
+	}
+	c.dependencies = map[string][]string{}
 }
 
 func (c *cacheManager) Persist() error {
@@ -369,18 +382,7 @@ func (c *cacheManager) DependsOn(pathA, pathB string) error {
 	c.Lock()
 	defer c.Unlock()
 
-	//assume pathA cache exists, otherwise we wouldn't be resolving imports
-	cacheA, ok := c.caches[pathA]
-	if !ok {
-		return fmt.Errorf(`expected cache for "%s" to exist`, pathA)
-	}
-
-	cacheB, ok := c.caches[pathB]
-	if ok {
-		cacheB.AddDependent(cacheA)
-	} else {
-		c.cacheItemDependent[pathB] = append(c.cacheItemDependent[pathB], cacheA)
-	}
+	c.dependencies[pathA] = append(c.dependencies[pathA], pathB)
 
 	return nil
 }
@@ -391,15 +393,6 @@ func (c *cacheManager) AddCache(path string, content *string) {
 	defer c.Unlock()
 
 	cache := newCacheItem(c.cacheDir, path, content)
-
-	dependents, ok := c.cacheItemDependent[path]
-	if ok {
-		for _, dependent := range dependents {
-			cache.AddDependent(dependent)
-		}
-
-		delete(c.cacheItemDependent, path)
-	}
 
 	//overwrite Path if it already exists
 	c.caches[path] = cache
@@ -460,13 +453,9 @@ func (c *cacheManager) readCacheDir() error {
 	for _, cache := range c.caches {
 		for dependentPath := range cache.dependents {
 			_, ok := c.caches[dependentPath]
-			if !ok {
-				return fmt.Errorf(
-					`unable to create cache dependency tree because cache with path "%s" doesnt' exist'`,
-					dependentPath,
-				)
+			if ok {
+				cache.dependents[dependentPath] = c.caches[dependentPath]
 			}
-			cache.dependents[dependentPath] = c.caches[dependentPath]
 		}
 	}
 

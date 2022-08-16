@@ -8,19 +8,22 @@
     import Donkey from "./donkey.svelte";
 
     export let Myprop;
-    //console.log("Myprop value: " + Myprop);
+
+
 
     let count = 0;
-    export function handleClick () {
-        count = count + 1;
+    export function handleClick() {
+        count = count + 2;
     }
+
+    //console.log("Myprop values: " + Myprop);
 
 </script>
 
-<h1>big wow!224445555</h1>
+<h1>big wow!22444555335</h1>
 <Button color="primary" on:click={toggle}>Hello World!</Button>
 <Modal body {isOpen} {toggle} header="Open Modal!">
-    <p>I hope you like dialogs</p>
+    <p>I hope you like dialogs555</p>
 </Modal>
 
 

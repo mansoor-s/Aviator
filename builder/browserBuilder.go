@@ -20,6 +20,11 @@ type BrowserImports struct {
 }
 */
 
+type StaticAsset struct {
+	MimeType string
+	Content  []byte
+}
+
 type BrowserBuilder struct {
 	vm     js.VM
 	cache  *cacheManager
@@ -47,8 +52,8 @@ func NewBrowserBuilder(
 // and will bundle and persist the outputs
 
 //BuildDev creates assets for embedding into the rendered view
-// It persists the assets into the output directory
-func (b *BrowserBuilder) BuildDev(allViews []*View) error {
+//references to those assets are added to the View object for the entrypoint svelte file
+func (b *BrowserBuilder) BuildDev(allViews []*View) (map[string]StaticAsset, error) {
 	viewsByEntryPoint := make(map[string]*View, len(allViews))
 	viewsByOutputName := make(map[string]*View, len(allViews))
 
@@ -98,8 +103,12 @@ func (b *BrowserBuilder) BuildDev(allViews []*View) error {
 			Kind:          esbuild.ErrorMessage,
 			TerminalWidth: 80,
 		})
-		return fmt.Errorf(strings.Join(msgs, "\n"))
+		return nil, fmt.Errorf(strings.Join(msgs, "\n"))
 	}
+
+	b.cache.Finished()
+
+	staticContent := map[string]StaticAsset{}
 
 	for _, file := range result.OutputFiles {
 		fileName := filepath.Base(file.Path)
@@ -112,12 +121,20 @@ func (b *BrowserBuilder) BuildDev(allViews []*View) error {
 
 		if extension == "js" {
 			view.JSImports = append(view.JSImports, fileName)
+			staticContent[fileName] = StaticAsset{
+				Content:  file.Contents,
+				MimeType: "text/javascript",
+			}
 		} else if extension == "css" {
 			view.CSSImports = append(view.CSSImports, fileName)
+			staticContent[fileName] = StaticAsset{
+				Content:  file.Contents,
+				MimeType: "text/css",
+			}
 		}
 	}
 
-	return nil
+	return staticContent, nil
 }
 
 //go:embed browserHelperTemplate.gotext
@@ -138,6 +155,14 @@ func (b *BrowserBuilder) browserRuntimePlugin(viewsByEntryPoint map[string]*View
 				func(args esbuild.OnResolveArgs) (result esbuild.OnResolveResult, err error) {
 					result.Namespace = "browserRuntime"
 					result.Path = args.Path
+
+					if args.Importer != "" {
+						err = b.cache.DependsOn(args.Importer, args.Path)
+						if err != nil {
+							return result, err
+						}
+					}
+
 					return result, nil
 				},
 			)

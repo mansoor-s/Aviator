@@ -8,6 +8,7 @@ type Input = {
     dev: boolean
     css: boolean
     enableSourcemap: boolean
+    isHydratable: boolean
 }
 
 // Capitalized for Go
@@ -30,11 +31,11 @@ type Output =
 // Compile svelte code
 
 export function compile(input: Input): string {
-    const { code, path, target, dev, css, enableSourcemap } = input
+    const { code, path, target, dev, css, enableSourcemap, isHydratable } = input
     const svelte = compileSvelte(code, {
         filename: path,
         generate: target,
-        hydratable: true,
+        hydratable: isHydratable,
         format: "esm",
         dev: dev,
         css: css,

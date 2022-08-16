@@ -26959,11 +26959,11 @@ ${frame}`
 
   // compiler.ts
   function compile2(input) {
-    const { code, path, target, dev, css, enableSourcemap } = input;
+    const { code, path, target, dev, css, enableSourcemap, isHydratable } = input;
     const svelte = compile(code, {
       filename: path,
       generate: target,
-      hydratable: true,
+      hydratable: isHydratable,
       format: "esm",
       dev,
       css,

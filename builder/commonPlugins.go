@@ -139,6 +139,13 @@ func wrappedComponentsPlugin(
 				func(args esbuild.OnResolveArgs) (result esbuild.OnResolveResult, err error) {
 					result.Namespace = "wrappedComponents"
 					result.Path = args.Path
+
+					/*
+						err = cache.DependsOn(args.Importer, args.Path)
+						if err != nil {
+							return result, err
+						}*/
+
 					return result, nil
 				},
 			)
@@ -148,37 +155,29 @@ func wrappedComponentsPlugin(
 				func(args esbuild.OnLoadArgs) (result esbuild.OnLoadResult, err error) {
 					var contents *string
 
-					cachedContent := cache.GetContent(args.Path)
-
-					//cache miss
-					if cachedContent == nil {
-						fmt.Printf(`Cache miss on file: %s\n`, args.Path)
-						//get the wrapped unique name by removing the extension
-						wrappedName := args.Path
-						fileExt := filepath.Ext(args.Path)
-						if len(fileExt) > 0 {
-							wrappedName = wrappedName[:len(wrappedName)-len(fileExt)]
-						}
-
-						view, ok := viewsByWrappedName[wrappedName]
-						if !ok {
-							return result, fmt.Errorf(
-								"unable to find wrapped component named: %s", wrappedName,
-							)
-						}
-
-						rawVirtualCode := createLayoutWrappedView(view)
-
-						compiledCode, err := compilerFunc(args.Path, []byte(rawVirtualCode))
-						if err != nil {
-							return result, err
-						}
-
-						contents = &compiledCode.JSCode
-						cache.AddCache(args.Path, contents)
-					} else {
-						contents = cachedContent
+					//get the wrapped unique name by removing the extension
+					wrappedName := args.Path
+					fileExt := filepath.Ext(args.Path)
+					if len(fileExt) > 0 {
+						wrappedName = wrappedName[:len(wrappedName)-len(fileExt)]
 					}
+
+					view, ok := viewsByWrappedName[wrappedName]
+					if !ok {
+						return result, fmt.Errorf(
+							"unable to find wrapped component named: %s", wrappedName,
+						)
+					}
+
+					rawVirtualCode := createLayoutWrappedView(view)
+
+					compiledCode, err := compilerFunc(args.Path, []byte(rawVirtualCode))
+					if err != nil {
+						return result, err
+					}
+
+					contents = &compiledCode.JSCode
+					cache.AddCache(args.Path, contents)
 
 					result.ResolveDir = workingDir
 					result.Contents = contents
@@ -213,6 +212,11 @@ func svelteComponentsPlugin(
 						}
 					}
 
+					err = cache.DependsOn(args.Importer, absPath)
+					if err != nil {
+						return result, err
+					}
+
 					result.Path = absPath
 					result.Namespace = "svelte"
 					return result, nil
@@ -237,15 +241,19 @@ func svelteComponentsPlugin(
 						if err != nil {
 							return result, err
 						}
-						contents = &compiledCode.JSCode
-						cache.AddCache(args.Path, &compiledCode.JSCode)
+						//contents = &compiledCode.JSCode
+
+						compiledContent := compiledCode.JSCode +
+							`//# sourceMappingURL=` +
+							compiledCode.JSSourceMap
+
+						contents = &compiledContent
+
+						cache.AddCache(args.Path, &compiledContent)
 					} else {
 						contents = cachedContent
 					}
 
-					/*contents := compiledCode.JSCode  +
-					`//# sourceMappingURL=` +
-					compiledCode.JSSourceMap*/
 					result.ResolveDir = workingDir
 					result.Contents = contents
 					result.Loader = esbuild.LoaderJSX

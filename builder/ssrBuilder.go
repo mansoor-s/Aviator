@@ -61,8 +61,8 @@ func (s *SSRBuilder) DevBuild(allViews []*View) (*CompiledResult, error) {
 		Bundle:        true,
 		Metafile:      false,
 		LogLevel:      esbuild.LogLevelInfo,
-		//Sourcemap:     esbuild.SourceMapInline,
-		Target: esbuild.ES2015,
+		Sourcemap:     esbuild.SourceMapInline,
+		Target:        esbuild.ES2015,
 		Plugins: []esbuild.Plugin{
 			s.ssrPlugin(allEntryPointViews),
 			wrappedComponentsPlugin(s.cache, s.workingDir, allViews, s.ssrCompile),
@@ -79,6 +79,7 @@ func (s *SSRBuilder) DevBuild(allViews []*View) (*CompiledResult, error) {
 		})
 		return nil, fmt.Errorf(strings.Join(msgs, "\n"))
 	}
+	s.cache.Finished()
 
 	compiledResult := &CompiledResult{
 		//SourceMap: result.OutputFiles[0].Contents,
