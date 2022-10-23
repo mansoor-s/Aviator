@@ -36,9 +36,11 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 *.tsbuildinfo
 
 node_modules/
+.vscode/
 
 
 .idea
+
 
 #generated assets in example uses
 bundled_assets/

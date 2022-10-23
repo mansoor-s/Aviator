@@ -5,12 +5,13 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	esbuild "github.com/evanw/esbuild/pkg/api"
-	"github.com/mansoor-s/aviator/js"
-	"github.com/mansoor-s/aviator/utils"
 	"path/filepath"
 	"strings"
 	"text/template"
+
+	esbuild "github.com/evanw/esbuild/pkg/api"
+	"github.com/mansoor-s/aviator/js"
+	"github.com/mansoor-s/aviator/utils"
 )
 
 /*
@@ -27,7 +28,7 @@ type StaticAsset struct {
 
 type BrowserBuilder struct {
 	vm     js.VM
-	cache  *cacheManager
+	cache  Cache
 	logger utils.Logger
 
 	workingDir string
@@ -36,7 +37,7 @@ type BrowserBuilder struct {
 func NewBrowserBuilder(
 	logger utils.Logger,
 	vm js.VM,
-	cache *cacheManager,
+	cache Cache,
 	workingDir string,
 ) *BrowserBuilder {
 	return &BrowserBuilder{
@@ -51,8 +52,8 @@ func NewBrowserBuilder(
 // browserRuntimePlugin func. This plugin will reference those virtual files
 // and will bundle and persist the outputs
 
-//BuildDev creates assets for embedding into the rendered view
-//references to those assets are added to the View object for the entrypoint svelte file
+// BuildDev creates assets for embedding into the rendered view
+// references to those assets are added to the View object for the entrypoint svelte file
 func (b *BrowserBuilder) BuildDev(allViews []*View) (map[string]StaticAsset, error) {
 	viewsByEntryPoint := make(map[string]*View, len(allViews))
 	viewsByOutputName := make(map[string]*View, len(allViews))
@@ -74,6 +75,8 @@ func (b *BrowserBuilder) BuildDev(allViews []*View) (map[string]StaticAsset, err
 		viewsByEntryPoint[entryPath] = view
 	}
 
+	cssCache := make(map[string]string)
+
 	result := esbuild.Build(esbuild.BuildOptions{
 		EntryPointsAdvanced: entryPoints,
 		Outdir:              "./",
@@ -87,14 +90,12 @@ func (b *BrowserBuilder) BuildDev(allViews []*View) (map[string]StaticAsset, err
 		Bundle:     true,
 		Sourcemap:  esbuild.SourceMapInline,
 		LogLevel:   esbuild.LogLevelInfo,
-		Plugins: append(
-			[]esbuild.Plugin{
-				b.browserRuntimePlugin(viewsByEntryPoint),
-				wrappedComponentsPlugin(b.cache, b.workingDir, allViews, b.browserCompile),
-				svelteComponentsPlugin(b.cache, b.workingDir, b.browserCompile),
-				npmJsPathPlugin(b.workingDir),
-			},
-		),
+		Plugins: []esbuild.Plugin{
+			b.browserRuntimePlugin(viewsByEntryPoint),
+			wrappedComponentsPlugin(b.cache, b.workingDir, allViews, b.browserCompile),
+			svelteComponentsPlugin(b.cache, b.workingDir, cssCache, b.browserCompile),
+			npmJsPathPlugin(b.workingDir),
+		},
 		Write: false,
 	})
 	if len(result.Errors) > 0 {
@@ -110,14 +111,17 @@ func (b *BrowserBuilder) BuildDev(allViews []*View) (map[string]StaticAsset, err
 
 	staticContent := map[string]StaticAsset{}
 
+	for _, view := range allViews {
+		view.JSImports = []string{}
+		view.CSSImports = []string{}
+	}
+
 	for _, file := range result.OutputFiles {
 		fileName := filepath.Base(file.Path)
 		extension := utils.FileExtension(fileName)
 		viewRefName := fileName[:len(fileName)-len(extension)-1]
 
 		view := viewsByOutputName[viewRefName]
-		view.JSImports = []string{}
-		view.CSSImports = []string{}
 
 		if extension == "js" {
 			view.JSImports = append(view.JSImports, fileName)
@@ -142,9 +146,9 @@ var browserTemplate string
 
 var browserGenerator = template.Must(template.New("browserTemplate").Parse(browserTemplate))
 
-//browserRuntimePlugin renders the browserTemplate for each component
-//The rendered content acts as the entrypoint that are used for the esbuild and
-//also imported by each of the view in the final HTML
+// browserRuntimePlugin renders the browserTemplate for each component
+// The rendered content acts as the entrypoint that are used for the esbuild and
+// also imported by each of the view in the final HTML
 func (b *BrowserBuilder) browserRuntimePlugin(viewsByEntryPoint map[string]*View) esbuild.Plugin {
 	return esbuild.Plugin{
 		Name: "browserRuntimePlugin",
@@ -189,10 +193,11 @@ func (b *BrowserBuilder) browserRuntimePlugin(viewsByEntryPoint map[string]*View
 
 func (b *BrowserBuilder) browserCompile(path string, code []byte) (*SvelteBuildOutput, error) {
 	expr := fmt.Sprintf(
-		`;__svelte__.compile({ "Path": %q, "code": %q, "target": "dom", "dev": %t, "css": true, "enableSourcemap": %t })`,
+		`;__svelte__.compile({ "Path": %q, "code": %q, "target": "dom", "dev": %t, "css": false, "enableSourcemap": %t, "isHydratable": %t })`,
 		path,
 		code,
-		true,
+		false,
+		false,
 		true,
 	)
 	result, err := b.vm.Eval(path, expr)

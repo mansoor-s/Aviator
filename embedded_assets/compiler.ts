@@ -43,11 +43,12 @@ export function compile(input: Input): string {
     })
 
     const jsSourceMap = enableSourcemap === true ? svelte.js.map.toUrl() : ""
+    const cssSourceMap = enableSourcemap === true ? svelte.css.map.toUrl() : ""
 
     return JSON.stringify({
         CSSCode: svelte.css.code,
         JSCode: svelte.js.code,
-        CSSSourceMap: "", //svelte.css.map.toUrl(),
+        CSSSourceMap: cssSourceMap,
         JSSourceMap: jsSourceMap,
     } as Output)
 }

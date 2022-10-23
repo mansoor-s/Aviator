@@ -5,18 +5,19 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"text/template"
+
 	esbuild "github.com/evanw/esbuild/pkg/api"
 	"github.com/mansoor-s/aviator/js"
 	"github.com/mansoor-s/aviator/utils"
-	"strings"
-	"text/template"
 )
 
 type SSRBuilder struct {
 	vm         js.VM
 	logger     utils.Logger
 	workingDir string
-	cache      *cacheManager
+	cache      Cache
 }
 
 type CompiledResult struct {
@@ -28,7 +29,7 @@ type CompiledResult struct {
 func NewSSRBuilder(
 	logger utils.Logger,
 	vm js.VM,
-	cache *cacheManager,
+	cache Cache,
 	workingDir string,
 ) *SSRBuilder {
 	return &SSRBuilder{
@@ -46,6 +47,9 @@ func (s *SSRBuilder) DevBuild(allViews []*View) (*CompiledResult, error) {
 			allEntryPointViews = append(allEntryPointViews, view)
 		}
 	}
+
+	cssCache := make(map[string]string)
+
 	result := esbuild.Build(esbuild.BuildOptions{
 		//__aviator_ssr.js is a file created by ssrPlugin at build-time
 		EntryPointsAdvanced: []esbuild.EntryPoint{
@@ -66,7 +70,7 @@ func (s *SSRBuilder) DevBuild(allViews []*View) (*CompiledResult, error) {
 		Plugins: []esbuild.Plugin{
 			s.ssrPlugin(allEntryPointViews),
 			wrappedComponentsPlugin(s.cache, s.workingDir, allViews, s.ssrCompile),
-			svelteComponentsPlugin(s.cache, s.workingDir, s.ssrCompile),
+			svelteComponentsPlugin(s.cache, s.workingDir, cssCache, s.ssrCompile),
 			npmJsPathPlugin(s.workingDir),
 		},
 	})
@@ -85,9 +89,11 @@ func (s *SSRBuilder) DevBuild(allViews []*View) (*CompiledResult, error) {
 		//SourceMap: result.OutputFiles[0].Contents,
 		JS: result.OutputFiles[0].Contents,
 	}
-	if len(result.OutputFiles) > 1 {
-		compiledResult.CSS = result.OutputFiles[1].Contents
-	}
+	//css is generated in the browser builder
+	/*
+		if len(result.OutputFiles) > 1 {
+			compiledResult.CSS = result.OutputFiles[1].Contents
+		}*/
 
 	return compiledResult, nil
 }
@@ -145,15 +151,16 @@ type SvelteBuildOutput struct {
 	CSSSourceMap string
 }
 
-//ssrCompile compiles a compiled
+// ssrCompile compiles a compiled
 func (s *SSRBuilder) ssrCompile(path string, code []byte) (*SvelteBuildOutput, error) {
-	format := `__svelte__.compile({ "Path": %q, "code": %q, "target": "ssr", "dev": %t, "css": false, "enableSourcemap": %t })`
+	format := `__svelte__.compile({ "Path": %q, "code": %q, "target": "ssr", "dev": %t, "css": false, "enableSourcemap": %t, "isHydratable": %t })`
 	expr := fmt.Sprintf(
 		format,
 		path,
 		code,
-		true,
-		true,
+		false,
+		false,
+		false,
 	)
 	result, err := s.vm.Eval(path, expr)
 	if err != nil {

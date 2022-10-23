@@ -19,10 +19,6 @@ export const self = {
     },
 }
 
-// In development mode when compiling for the browser we hit this codepath:
-// https://github.com/Rich-Harris/magic-string/blob/8f666889136ac2580356e48610b3ac95c276191e/src/SourceMap.js#L3-L10
-// Since we're running in a V8 isolate, we don't have a window or a Buffer.
-
 export const window = {
     btoa: (data: string): string => {
         return ""//btoa(data)

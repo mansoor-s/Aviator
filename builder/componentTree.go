@@ -2,11 +2,12 @@ package builder
 
 import (
 	"fmt"
-	"github.com/mansoor-s/aviator/utils"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/mansoor-s/aviator/utils"
 )
 
 //for every component determine the appropriate __layout file
@@ -67,7 +68,7 @@ func (l *Layout) ApplicableLayouts() []*Layout {
 	return ancestors
 }
 
-//RelativePath returns the relative Path of the layout to the views directory
+// RelativePath returns the relative Path of the layout to the views directory
 func (l *Layout) RelativePath() string {
 	relPath, _ := filepath.Rel(l.rootTree.path, l.Path)
 	return relPath
@@ -90,15 +91,15 @@ type Component struct {
 	rootTree *componentTree
 }
 
-//RelativePath returns the relative Path of the component to the views directory
+// RelativePath returns the relative Path of the component to the views directory
 func (c *Component) RelativePath() string {
 	relPath, _ := filepath.Rel(c.rootTree.path, c.Path)
 	return relPath
 }
 
-//ApplicableLayouts returns a flattened layout hierarchy of layouts applicable
-//to this component. Layout index determines its proximity to the component
-//in the hierarchy
+// ApplicableLayouts returns a flattened layout hierarchy of layouts applicable
+// to this component. Layout index determines its proximity to the component
+// in the hierarchy
 func (c *Component) ApplicableLayouts() []*Layout {
 	if c.Layout == nil {
 		return nil
@@ -132,7 +133,7 @@ type componentTree struct {
 	rootTree *componentTree
 }
 
-//CreateComponentTree creates a componentTree based on the absolute Path
+// CreateComponentTree creates a componentTree based on the absolute Path
 // it performs a depth-first search through all subdirectories under
 // the specified Path
 func CreateComponentTree(path string) (*componentTree, error) {
@@ -163,9 +164,9 @@ func createComponentTree(parentTree *componentTree, path string) (*componentTree
 	return tree, nil
 }
 
-//ReScan forces the componentTree to rescan it's children and child components and layouts
-//starting only at the directory depth associated with this tree
-//ReScan will NOT walk down to child trees
+// ReScan forces the componentTree to rescan it's children and child components and layouts
+// starting only at the directory depth associated with this tree
+// ReScan will NOT walk down to child trees
 func (c *componentTree) ReScan() error {
 	// first find all +layouts
 	err := c.findLayouts()
@@ -261,7 +262,7 @@ func (c *componentTree) GetAllDescendentTrees() map[string]*componentTree {
 	return descendents
 }
 
-//findChildTrees walks through all child directories and recursively
+// findChildTrees walks through all child directories and recursively
 // creates a componentTree for each if one doesn't exist
 func (c *componentTree) findChildTrees() error {
 	dirs, err := os.ReadDir(c.path)
@@ -322,7 +323,7 @@ func (c *componentTree) resolveComponentLayouts() {
 var svelteFileRegexp = regexp.MustCompile(`.*\.svelte$`)
 var svelteLayoutRegexp = regexp.MustCompile(`\+layout.*\.svelte$`)
 
-//finds all component files in current tree level (aka directory depth)
+// finds all component files in current tree level (aka directory depth)
 func (c *componentTree) findComponents() error {
 	files, err := os.ReadDir(c.path)
 	if err != nil {
@@ -363,14 +364,14 @@ func (c *componentTree) findComponents() error {
 	}
 
 	//remove stale components that are no longer in the FS
-	for _, componentName := range componentsInDir {
+	/*for _, componentName := range componentsInDir {
 		delete(c.Layouts, componentName)
-	}
+	} */
 
 	return nil
 }
 
-//finds all +layout files in current tree level (aka directory depth)
+// finds all +layout files in current tree level (aka directory depth)
 func (c *componentTree) findLayouts() error {
 	files, err := os.ReadDir(c.path)
 	if err != nil {
@@ -406,14 +407,20 @@ func (c *componentTree) findLayouts() error {
 	}
 
 	//remove stale layouts that are no longer in the FS
-	for _, layoutName := range layoutsInDir {
-		delete(c.Layouts, layoutName)
+	/*for _, layout := range c.Layouts {
+		for _, layoutInDirName := range layoutsInDir {
+			if layoutInDirName != layoutName {
+				continue
+			}
+			//delete(c.Layouts, layoutName)
+		}
 	}
+	*/
 
 	return nil
 }
 
-//getLayoutInfo returns the layout name and parent layout name if it exists
+// getLayoutInfo returns the layout name and parent layout name if it exists
 // will return an empty string if a parent layout is not in the name
 func getLayoutInfo(path string) (string, string) {
 	fileName := strings.Split(path, ".")[0]
@@ -435,8 +442,8 @@ func getLayoutWithParentName(name string) (string, string) {
 	return nameParts[0], nameParts[1]
 }
 
-//getComponentWithLayoutName returns the component file name (without the layout part of the name)
-//along with the layout name if one exists in its name
+// getComponentWithLayoutName returns the component file name (without the layout part of the name)
+// along with the layout name if one exists in its name
 func getComponentWithLayoutName(path string) (string, string) {
 	fileName := strings.Split(path, ".")[0]
 
@@ -448,7 +455,7 @@ func getComponentWithLayoutName(path string) (string, string) {
 	return nameParts[0], nameParts[1]
 }
 
-//ResolveLayoutByName recursively finds the named layout.
+// ResolveLayoutByName recursively finds the named layout.
 // first it will search in the current component tree level
 // if it can't find it, it will walk up to all the ancestor trees
 // returns nil if a layout is not found
@@ -474,7 +481,7 @@ func (c *componentTree) resolveLayoutParents() {
 	}
 }
 
-//RescanDir rescans the path to add / remove files and directories
+// RescanDir rescans the path to add / remove files and directories
 // if path is a file, it will just look at the directory portion of the path
 func (c *componentTree) RescanDir(path string) error {
 	allTrees := c.GetAllDescendentTrees()

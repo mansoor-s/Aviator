@@ -10,9 +10,8 @@ import (
 )
 
 type ssrData struct {
-	Head    string
-	Body    string
-	PageCSS string
+	Head string
+	Body string
 
 	//this is created during bundling
 	BundledCSS string
@@ -61,9 +60,16 @@ func (v *ViewManager) Render(
 	}
 
 	ssrOutputData.Head = ssrOutputData.Head + "\n" +
-		v.createJSImportTags(view.JSImports) +
-		v.createCSSImportTag(view.CSSImports) +
-		v.createPropsScriptElem(jsonValue)
+		v.createJSImportTags(view.JSImports)
+
+	_, baseStyleFound := v.staticContent[baseCSSStyleName]
+	if baseStyleFound {
+		ssrOutputData.Head += v.createCSSImportTag(baseCSSStyleName)
+	}
+
+	ssrOutputData.Head +=
+		v.createCSSImportTags(view.CSSImports) +
+			v.createPropsScriptElem(jsonValue)
 
 	ssrOutputData.Lang = v.htmlLang
 	//cssPath := path.Join(a.assetListenPath, a._compiledCSSFileName)
@@ -97,13 +103,16 @@ func (v *ViewManager) createJSImportTags(assetImports []string) string {
 
 	return output
 }
-
-func (v *ViewManager) createCSSImportTag(assetImports []string) string {
+func (v *ViewManager) createCSSImportTags(assetImports []string) string {
 	output := ""
-	format := "<link href=\"%s\" rel=\"stylesheet\">\n"
 	for _, rawPath := range assetImports {
-		output += fmt.Sprintf(format, filepath.Join(v.staticAssetsRoute, rawPath))
+		output += v.createCSSImportTag(rawPath)
 	}
-
 	return output
+}
+
+func (v *ViewManager) createCSSImportTag(path string) string {
+	format := "<link href=\"%s\" rel=\"stylesheet\">\n"
+	return fmt.Sprintf(format, filepath.Join(v.staticAssetsRoute, path))
+
 }

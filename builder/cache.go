@@ -114,8 +114,8 @@ func newCacheItem(cacheDir, path string, content *string) *cacheItem {
 	return c
 }
 
-//IsValid checks to see if cache is not stale by re-hashing the contents
-//of the underlying file
+// IsValid checks to see if cache is not stale by re-hashing the contents
+// of the underlying file
 func (c *cacheItem) IsValid() bool {
 	return c.pathFileHash() == c.pathContentHash
 }
@@ -245,8 +245,8 @@ func (c *cacheItem) PersistToFS() error {
 	return nil
 }
 
-//Invalidate deletes FS cache and notifies cacheItems that depend
-//on this item to Invalidate themselves
+// Invalidate deletes FS cache and notifies cacheItems that depend
+// on this item to Invalidate themselves
 func (c *cacheItem) Invalidate() error {
 	c.markedForDeletion = true
 
@@ -365,7 +365,7 @@ func (c *cacheManager) Persist() error {
 	return nil
 }
 
-//GetContent returns the cached content if it exists, else it returns nil
+// GetContent returns the cached content if it exists, else it returns nil
 func (c *cacheManager) GetContent(path string) *string {
 	c.RLock()
 	defer c.RUnlock()
@@ -387,7 +387,7 @@ func (c *cacheManager) DependsOn(pathA, pathB string) error {
 	return nil
 }
 
-//AddCache creates a cache object for the file being cached
+// AddCache creates a cache object for the file being cached
 func (c *cacheManager) AddCache(path string, content *string) {
 	c.Lock()
 	defer c.Unlock()
@@ -478,3 +478,47 @@ func (c *cacheManager) readCacheDir() error {
 
 	return nil
 }
+
+type nopCache struct {
+}
+
+func newNopCache() (*nopCache, error) {
+	return &nopCache{}, nil
+}
+
+func (c *nopCache) Finished() {
+
+}
+
+func (c *nopCache) Persist() error {
+	return nil
+}
+
+// GetContent returns the cached content if it exists, else it returns nil
+func (c *nopCache) GetContent(path string) *string {
+	return nil
+}
+
+func (c *nopCache) DependsOn(pathA, pathB string) error {
+	return nil
+}
+
+// AddCache creates a cache object for the file being cached
+func (c *nopCache) AddCache(path string, content *string) {
+}
+
+func (c *nopCache) Invalidate(path string) error {
+	return nil
+}
+
+type Cache interface {
+	Finished()
+	Persist() error
+	GetContent(path string) *string
+	DependsOn(pathA, pathB string) error
+	AddCache(path string, content *string)
+	Invalidate(path string) error
+}
+
+var _ Cache = &nopCache{}
+var _ Cache = &cacheManager{}

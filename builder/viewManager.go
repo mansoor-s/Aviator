@@ -2,16 +2,17 @@ package builder
 
 import (
 	"fmt"
-	"github.com/fsnotify/fsnotify"
-	"github.com/mansoor-s/aviator/js"
-	"github.com/mansoor-s/aviator/utils"
-	"github.com/mansoor-s/aviator/watcher"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"text/template"
 	"time"
+
+	"github.com/fsnotify/fsnotify"
+	"github.com/mansoor-s/aviator/js"
+	"github.com/mansoor-s/aviator/utils"
+	"github.com/mansoor-s/aviator/watcher"
 )
 
 /*
@@ -44,6 +45,7 @@ It renders the view when requested
 */
 
 const eventBatchTime = 500 * time.Millisecond
+const baseCSSStyleName = "__aviator__base_style.css"
 
 type ViewManager struct {
 	viewsDir  string
@@ -60,8 +62,8 @@ type ViewManager struct {
 	views         map[string]*View
 	staticContent map[string]StaticAsset
 
-	ssrCache     *cacheManager
-	browserCache *cacheManager
+	ssrCache     Cache
+	browserCache Cache
 
 	browserBuilder    *BrowserBuilder
 	ssrBuilder        *SSRBuilder
@@ -88,12 +90,12 @@ func NewViewManager(
 		return nil, err
 	}
 
-	ssrCache, err := newCacheManager(CacheTypeSSR, cacheDir)
+	ssrCache, err := newNopCache() //newCacheManager(CacheTypeSSR, cacheDir)
 	if err != nil {
 		return nil, err
 	}
 
-	browserCache, err := newCacheManager(CacheTypeBrowser, cacheDir)
+	browserCache, err := newNopCache() //newCacheManager(CacheTypeBrowser, cacheDir)
 	if err != nil {
 		return nil, err
 	}
@@ -125,6 +127,7 @@ func NewViewManager(
 func (v *ViewManager) Build() error {
 	allViews := v.AllViews()
 
+	//TODO: break up browser builds by page? maybe?
 	staticContent, err := v.browserBuilder.BuildDev(allViews)
 	if err != nil {
 		v.logger.Error("error building SSR build: " + err.Error())
@@ -148,6 +151,13 @@ func (v *ViewManager) Build() error {
 	if err != nil {
 		v.logger.Error("error persisting SSR cache: " + err.Error())
 		return err
+	}
+
+	if len(ssrBuild.CSS) > 0 {
+		v.staticContent[baseCSSStyleName] = StaticAsset{
+			Content:  ssrBuild.CSS,
+			MimeType: "text/css",
+		}
 	}
 
 	_, err = v.vm.Eval(
@@ -184,13 +194,13 @@ func (v *ViewManager) refreshViews() {
 	}
 }
 
-//ViewByRelPath returns a view by the relative Path
+// ViewByRelPath returns a view by the relative Path
 func (v *ViewManager) ViewByRelPath(path string) *View {
-	view, _ := v.views[path]
+	view := v.views[path]
 	return view
 }
 
-//AllViews returns all views
+// AllViews returns all views
 func (v *ViewManager) AllViews() []*View {
 	var views []*View
 	for _, view := range v.views {
@@ -199,7 +209,7 @@ func (v *ViewManager) AllViews() []*View {
 	return views
 }
 
-//StartWatch starts watching views directory for changes
+// StartWatch starts watching views directory for changes
 func (v *ViewManager) StartWatch() error {
 	//fsnotify doesn't currently support watching a directory recursively, so we must
 	//manually watch each child directory here

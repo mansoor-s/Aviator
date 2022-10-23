@@ -26970,10 +26970,11 @@ ${frame}`
       enableSourcemap
     });
     const jsSourceMap = enableSourcemap === true ? svelte.js.map.toUrl() : "";
+    const cssSourceMap = enableSourcemap === true ? svelte.css.map.toUrl() : "";
     return JSON.stringify({
       CSSCode: svelte.css.code,
       JSCode: svelte.js.code,
-      CSSSourceMap: "",
+      CSSSourceMap: cssSourceMap,
       JSSourceMap: jsSourceMap
     });
   }

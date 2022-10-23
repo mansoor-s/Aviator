@@ -2,7 +2,10 @@ package js
 
 import (
 	"errors"
+
 	"github.com/dop251/goja"
+	"github.com/dop251/goja_nodejs/console"
+	"github.com/dop251/goja_nodejs/require"
 )
 
 type gojaVM struct {
@@ -14,8 +17,11 @@ type gojaVM struct {
 //var _ VM = &gojaVM{}
 
 func newGojaVM() (*gojaVM, error) {
+	runtime := goja.New()
+	new(require.Registry).Enable(runtime)
+	console.Enable(runtime)
 	return &gojaVM{
-		runtime:     goja.New(),
+		runtime:     runtime,
 		preCompiled: make(map[string]*goja.Program),
 	}, nil
 }
