@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 	"text/template"
 
 	esbuild "github.com/evanw/esbuild/pkg/api"
@@ -75,7 +76,7 @@ func (b *BrowserBuilder) BuildDev(allViews []*View) (map[string]StaticAsset, err
 		viewsByEntryPoint[entryPath] = view
 	}
 
-	cssCache := make(map[string]string)
+	cssCache := &sync.Map{}
 
 	result := esbuild.Build(esbuild.BuildOptions{
 		EntryPointsAdvanced: entryPoints,
@@ -85,11 +86,15 @@ func (b *BrowserBuilder) BuildDev(allViews []*View) (map[string]StaticAsset, err
 		Platform:            esbuild.PlatformBrowser,
 		// Add "import" condition to support svelte/internal
 		// https://esbuild.github.io/api/#how-conditions-work
-		Conditions: []string{"browser", "default", "import"},
-		Metafile:   false,
-		Bundle:     true,
-		Sourcemap:  esbuild.SourceMapInline,
-		LogLevel:   esbuild.LogLevelInfo,
+		Conditions:        []string{"browser", "default", "import"},
+		Metafile:          false,
+		Bundle:            true,
+		MinifyWhitespace:  true,
+		MinifyIdentifiers: true,
+		MinifySyntax:      true,
+		LegalComments:     esbuild.LegalCommentsNone,
+		Sourcemap:         esbuild.SourceMapInline,
+		LogLevel:          esbuild.LogLevelInfo,
 		Plugins: []esbuild.Plugin{
 			b.browserRuntimePlugin(viewsByEntryPoint),
 			wrappedComponentsPlugin(b.cache, b.workingDir, allViews, b.browserCompile),

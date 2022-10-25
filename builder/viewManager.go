@@ -49,7 +49,6 @@ const baseCSSStyleName = "__aviator__base_style.css"
 
 type ViewManager struct {
 	viewsDir  string
-	cacheDir  string
 	isDevMode bool
 	tree      *componentTree
 	vm        js.VM
@@ -90,12 +89,12 @@ func NewViewManager(
 		return nil, err
 	}
 
-	ssrCache, err := newNopCache() //newCacheManager(CacheTypeSSR, cacheDir)
+	ssrCache, err := newCacheManager(CacheTypeSSR, cacheDir) // newNopCache()
 	if err != nil {
 		return nil, err
 	}
 
-	browserCache, err := newNopCache() //newCacheManager(CacheTypeBrowser, cacheDir)
+	browserCache, err := newCacheManager(CacheTypeBrowser, cacheDir) //newNopCache()
 	if err != nil {
 		return nil, err
 	}
@@ -164,6 +163,10 @@ func (v *ViewManager) Build() error {
 		"aviator_ssr_router.js",
 		string(ssrBuild.JS),
 	)
+	if err != nil {
+		return fmt.Errorf("encoutered error while evaluating generated JS code. "+
+			"This is most likely caused by the use of a new or not yet supported JS feature: %+v", err)
+	}
 
 	return err
 }

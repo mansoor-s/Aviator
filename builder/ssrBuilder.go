@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"text/template"
 
 	esbuild "github.com/evanw/esbuild/pkg/api"
@@ -48,7 +49,7 @@ func (s *SSRBuilder) DevBuild(allViews []*View) (*CompiledResult, error) {
 		}
 	}
 
-	cssCache := make(map[string]string)
+	cssCache := &sync.Map{}
 
 	result := esbuild.Build(esbuild.BuildOptions{
 		//__aviator_ssr.js is a file created by ssrPlugin at build-time

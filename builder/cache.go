@@ -522,3 +522,36 @@ type Cache interface {
 
 var _ Cache = &nopCache{}
 var _ Cache = &cacheManager{}
+
+type serializedCacheContent struct {
+	Js  *string
+	Css *string
+}
+
+// createCacheContent JSON encodes the js and css content
+func serializeCacheContent(js, css *string) (*string, error) {
+	obj := serializedCacheContent{
+		Js:  js,
+		Css: css,
+	}
+
+	out, err := json.Marshal(obj)
+	if err != nil {
+		return nil, err
+	}
+
+	outputStr := string(out)
+
+	return &outputStr, nil
+}
+
+func deserializeCacheContent(content *string) (*string, *string, error) {
+	var obj serializedCacheContent
+
+	err := json.Unmarshal([]byte(*content), &obj)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return obj.Js, obj.Css, nil
+}

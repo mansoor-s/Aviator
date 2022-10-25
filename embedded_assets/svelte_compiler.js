@@ -3253,10 +3253,10 @@ var __svelte__ = (() => {
     this.groupNames = [];
     this.backReferenceNames = [];
   };
-  RegExpValidationState.prototype.reset = function reset(start, pattern2, flags) {
+  RegExpValidationState.prototype.reset = function reset(start, pattern, flags) {
     var unicode = flags.indexOf("u") !== -1;
     this.start = start | 0;
-    this.source = pattern2 + "";
+    this.source = pattern + "";
     this.flags = flags;
     this.switchU = unicode && this.parser.options.ecmaVersion >= 6;
     this.switchN = unicode && this.parser.options.ecmaVersion >= 9;
@@ -4454,7 +4454,7 @@ var __svelte__ = (() => {
       }
       ++this.pos;
     }
-    var pattern2 = this.input.slice(start, this.pos);
+    var pattern = this.input.slice(start, this.pos);
     ++this.pos;
     var flagsStart = this.pos;
     var flags = this.readWord1();
@@ -4462,15 +4462,15 @@ var __svelte__ = (() => {
       this.unexpected(flagsStart);
     }
     var state = this.regexpState || (this.regexpState = new RegExpValidationState(this));
-    state.reset(start, pattern2, flags);
+    state.reset(start, pattern, flags);
     this.validateRegExpFlags(state);
     this.validateRegExpPattern(state);
     var value2 = null;
     try {
-      value2 = new RegExp(pattern2, flags);
+      value2 = new RegExp(pattern, flags);
     } catch (e) {
     }
-    return this.finishToken(types$1.regexp, { pattern: pattern2, flags, value: value2 });
+    return this.finishToken(types$1.regexp, { pattern, flags, value: value2 });
   };
   pp.readInt = function(radix, len, maybeLegacyOctalNumericLiteral) {
     var allowSeparators = this.options.ecmaVersion >= 12 && len === void 0;
@@ -4872,10 +4872,25 @@ var __svelte__ = (() => {
     }
     return target;
   }
-  var pattern = /^\s*svelte-ignore\s+([\s\S]+)\s*$/m;
+  var regex_whitespace = /\s/;
+  var regex_starts_with_whitespace = /^\s/;
+  var regex_starts_with_whitespaces = /^[ \t\r\n]*/;
+  var regex_ends_with_whitespace = /\s$/;
+  var regex_ends_with_whitespaces = /[ \t\r\n]*$/;
+  var regex_only_whitespaces = /^\s+$/;
+  var regex_whitespace_characters = /\s/g;
+  var regex_non_whitespace_character = /\S/;
+  var regex_starts_with_newline = /^\r?\n/;
+  var regex_not_newline_characters = /[^\n]/g;
+  var regex_double_quotes = /"/g;
+  var regex_backslashes = /\\/g;
+  var regex_starts_with_underscore = /^_/;
+  var regex_ends_with_underscore = /_$/;
+  var regex_dimensions = /^(?:offset|client)(?:Width|Height)$/;
+  var regex_svelte_ignore = /^\s*svelte-ignore\s+([\s\S]+)\s*$/m;
   function extract_svelte_ignore(text2) {
-    const match = pattern.exec(text2);
-    return match ? match[1].split(/[^\S]/).map((x2) => x2.trim()).filter(Boolean) : [];
+    const match = regex_svelte_ignore.exec(text2);
+    return match ? match[1].split(regex_whitespace).map((x2) => x2.trim()).filter(Boolean) : [];
   }
   function extract_svelte_ignore_from_comments(node2) {
     return flatten((node2.leadingComments || []).map((comment) => extract_svelte_ignore(comment.value)));
@@ -5089,8 +5104,16 @@ var __svelte__ = (() => {
     }
   };
   var void_element_names = /^(?:area|base|br|col|command|embed|hr|img|input|keygen|link|meta|param|source|track|wbr)$/;
+  var html_element_names = /^(?:a|abbr|address|area|article|aside|audio|b|base|bdi|bdo|blockquote|body|br|button|canvas|caption|cite|code|col|colgroup|data|datalist|dd|del|details|dfn|dialog|div|dl|dt|em|embed|fieldset|figcaption|figure|footer|form|h1|h2|h3|h4|h5|h6|head|header|hr|html|i|iframe|img|input|ins|kbd|label|legend|li|link|main|map|mark|meta|meter|nav|noscript|object|ol|optgroup|option|output|p|param|picture|pre|progress|q|rp|rt|ruby|s|samp|script|section|select|small|source|span|strong|style|sub|summary|sup|table|tbody|td|template|textarea|tfoot|th|thead|time|title|tr|track|u|ul|var|video|wbr)$/;
+  var svg = /^(?:altGlyph|altGlyphDef|altGlyphItem|animate|animateColor|animateMotion|animateTransform|circle|clipPath|color-profile|cursor|defs|desc|discard|ellipse|feBlend|feColorMatrix|feComponentTransfer|feComposite|feConvolveMatrix|feDiffuseLighting|feDisplacementMap|feDistantLight|feDropShadow|feFlood|feFuncA|feFuncB|feFuncG|feFuncR|feGaussianBlur|feImage|feMerge|feMergeNode|feMorphology|feOffset|fePointLight|feSpecularLighting|feSpotLight|feTile|feTurbulence|filter|font|font-face|font-face-format|font-face-name|font-face-src|font-face-uri|foreignObject|g|glyph|glyphRef|hatch|hatchpath|hkern|image|line|linearGradient|marker|mask|mesh|meshgradient|meshpatch|meshrow|metadata|missing-glyph|mpath|path|pattern|polygon|polyline|radialGradient|rect|set|solidcolor|stop|svg|switch|symbol|text|textPath|tref|tspan|unknown|use|view|vkern)$/;
   function is_void(name) {
     return void_element_names.test(name) || name.toLowerCase() === "!doctype";
+  }
+  function is_html(name) {
+    return html_element_names.test(name);
+  }
+  function is_svg(name) {
+    return svg.test(name);
   }
   function list$1(items, conjunction = "or") {
     if (items.length === 1)
@@ -5197,6 +5220,14 @@ var __svelte__ = (() => {
     invalid_element_placement: (slug, name) => ({
       code: `invalid-${slug}-placement`,
       message: `<${name}> tags cannot be inside elements or blocks`
+    }),
+    invalid_logic_block_placement: (location, name) => ({
+      code: "invalid-logic-block-placement",
+      message: `{#${name}} logic block cannot be ${location}`
+    }),
+    invalid_tag_placement: (location, name) => ({
+      code: "invalid-tag-placement",
+      message: `{@${name}} tag cannot be ${location}`
     }),
     invalid_ref_directive: (name) => ({
       code: "invalid-ref-directive",
@@ -6998,11 +7029,6 @@ ${str}`);
     ecmaVersion: 12,
     locations: true
   });
-  var whitespace = /[ \t\r\n]/;
-  var start_whitespace = /^[ \t\r\n]*/;
-  var end_whitespace = /[ \t\r\n]*$/;
-  var start_newline = /^\r?\n/;
-  var dimensions = /^(?:offset|client)(?:Width|Height)$/;
   function read_expression(parser2) {
     try {
       const node2 = parse_expression_at(parser2.template, parser2.index);
@@ -7016,7 +7042,7 @@ ${str}`);
         const char = parser2.template[index];
         if (char === ")") {
           num_parens -= 1;
-        } else if (!whitespace.test(char)) {
+        } else if (!regex_whitespace.test(char)) {
           parser2.error(parser_errors.unexpected_token(")"), index);
         }
         index += 1;
@@ -7027,6 +7053,7 @@ ${str}`);
       parser2.acorn_error(err);
     }
   }
+  var regex_closing_script_tag = /<\/script\s*>/;
   function get_context(parser2, attributes, start) {
     const context = attributes.find((attribute) => attribute.name === "context");
     if (!context)
@@ -7042,12 +7069,12 @@ ${str}`);
   }
   function read_script(parser2, start, attributes) {
     const script_start = parser2.index;
-    const data2 = parser2.read_until(/<\/script\s*>/, parser_errors.unclosed_script);
+    const data2 = parser2.read_until(regex_closing_script_tag, parser_errors.unclosed_script);
     if (parser2.index >= parser2.template.length) {
       parser2.error(parser_errors.unclosed_script);
     }
-    const source = parser2.template.slice(0, script_start).replace(/[^\n]/g, " ") + data2;
-    parser2.read(/<\/script\s*>/);
+    const source = parser2.template.slice(0, script_start).replace(regex_not_newline_characters, " ") + data2;
+    parser2.read(regex_closing_script_tag);
     let ast;
     try {
       ast = parse$2(source);
@@ -11107,9 +11134,10 @@ ${str}`);
     node
   };
   var parser$1 = create(parser);
+  var regex_closing_style_tag = /<\/style\s*>/;
   function read_style(parser2, start, attributes) {
     const content_start = parser2.index;
-    const styles = parser2.read_until(/<\/style\s*>/, parser_errors.unclosed_style);
+    const styles = parser2.read_until(regex_closing_style_tag, parser_errors.unclosed_style);
     if (parser2.index >= parser2.template.length) {
       parser2.error(parser_errors.unclosed_style);
     }
@@ -11155,7 +11183,7 @@ ${str}`);
         }
       }
     });
-    parser2.read(/<\/style\s*>/);
+    parser2.read(regex_closing_style_tag);
     const end = parser2.index;
     return {
       type: "Style",
@@ -13353,11 +13381,14 @@ ${str}`);
     }
     return false;
   }
+  var regex_closing_textarea_tag = /^<\/textarea(\s[^>]*)?>/i;
+  var regex_closing_comment = /-->/;
+  var regex_capital_letter = /[A-Z]/;
   function tag(parser2) {
     const start = parser2.index++;
     let parent = parser2.current();
     if (parser2.eat("!--")) {
-      const data2 = parser2.read_until(/-->/);
+      const data2 = parser2.read_until(regex_closing_comment);
       parser2.eat("-->", true, parser_errors.unclosed_comment);
       parser2.current().children.push({
         start,
@@ -13386,7 +13417,7 @@ ${str}`);
         parser2.meta_tags[name] = true;
       }
     }
-    const type = meta_tags.has(name) ? meta_tags.get(name) : /[A-Z]/.test(name[0]) || name === "svelte:self" || name === "svelte:component" ? "InlineComponent" : name === "svelte:fragment" ? "SlotTemplate" : name === "title" && parent_is_head(parser2.stack) ? "Title" : name === "slot" && !parser2.customElement ? "Slot" : "Element";
+    const type = meta_tags.has(name) ? meta_tags.get(name) : regex_capital_letter.test(name[0]) || name === "svelte:self" || name === "svelte:component" ? "InlineComponent" : name === "svelte:fragment" ? "SlotTemplate" : name === "title" && parent_is_head(parser2.stack) ? "Title" : name === "slot" && !parser2.customElement ? "Slot" : "Element";
     const element = {
       start,
       end: null,
@@ -13467,8 +13498,8 @@ ${str}`);
     if (self_closing) {
       element.end = parser2.index;
     } else if (name === "textarea") {
-      element.children = read_sequence(parser2, () => /^<\/textarea(\s[^>]*)?>/i.test(parser2.template.slice(parser2.index)));
-      parser2.read(/^<\/textarea(\s[^>]*)?>/i);
+      element.children = read_sequence(parser2, () => regex_closing_textarea_tag.test(parser2.template.slice(parser2.index)), "inside <textarea>");
+      parser2.read(regex_closing_textarea_tag);
       element.end = parser2.index;
     } else if (name === "script" || name === "style") {
       const start2 = parser2.index;
@@ -13481,6 +13512,7 @@ ${str}`);
       parser2.stack.push(element);
     }
   }
+  var regex_whitespace_or_slash_or_closing_tag = /(\s|\/|>)/;
   function read_tag_name(parser2) {
     const start = parser2.index;
     if (parser2.read(SELF)) {
@@ -13504,7 +13536,7 @@ ${str}`);
       return "svelte:element";
     if (parser2.read(SLOT))
       return "svelte:fragment";
-    const name = parser2.read_until(/(\s|\/|>)/);
+    const name = parser2.read_until(regex_whitespace_or_slash_or_closing_tag);
     if (meta_tags.has(name))
       return name;
     if (name.startsWith("svelte:")) {
@@ -13516,6 +13548,8 @@ ${str}`);
     }
     return name;
   }
+  var regex_token_ending_character = /[\s=\/>"']/;
+  var regex_quote_characters = /["']/;
   function read_attribute(parser2, unique_names) {
     const start = parser2.index;
     function check_unique(name2) {
@@ -13564,7 +13598,7 @@ ${str}`);
         };
       }
     }
-    const name = parser2.read_until(/[\s=\/>"']/);
+    const name = parser2.read_until(regex_token_ending_character);
     if (!name)
       return null;
     let end = parser2.index;
@@ -13576,7 +13610,7 @@ ${str}`);
       parser2.allow_whitespace();
       value2 = read_attribute_value(parser2);
       end = parser2.index;
-    } else if (parser2.match_regex(/["']/)) {
+    } else if (parser2.match_regex(regex_quote_characters)) {
       parser2.error(parser_errors.unexpected_token("="), parser2.index);
     }
     if (type) {
@@ -13598,6 +13632,7 @@ ${str}`);
           end,
           type,
           name: directive_name,
+          modifiers,
           value: value2
         };
       }
@@ -13677,7 +13712,7 @@ ${str}`);
     const regex = quote_mark === "'" ? /'/ : quote_mark === '"' ? /"/ : /(\/>|[\s"'=<>`])/;
     let value2;
     try {
-      value2 = read_sequence(parser2, () => !!parser2.match_regex(regex));
+      value2 = read_sequence(parser2, () => !!parser2.match_regex(regex), "in attribute value");
     } catch (error2) {
       if (error2.code === "parse-error") {
         if (parser2.template.slice(error2.pos - 1, error2.pos + 1) === "/>") {
@@ -13694,7 +13729,7 @@ ${str}`);
       parser2.index += 1;
     return value2;
   }
-  function read_sequence(parser2, done) {
+  function read_sequence(parser2, done, location) {
     let current_chunk = {
       start: parser2.index,
       end: null,
@@ -13716,6 +13751,17 @@ ${str}`);
         flush(parser2.index);
         return chunks;
       } else if (parser2.eat("{")) {
+        if (parser2.match("#")) {
+          const index2 = parser2.index - 1;
+          parser2.eat("#");
+          const name = parser2.read_until(/[^a-z]/);
+          parser2.error(parser_errors.invalid_logic_block_placement(location, name), index2);
+        } else if (parser2.match("@")) {
+          const index2 = parser2.index - 1;
+          parser2.eat("@");
+          const name = parser2.read_until(/[^a-z]/);
+          parser2.error(parser_errors.invalid_tag_placement(location, name), index2);
+        }
         flush(parser2.index - 1);
         parser2.allow_whitespace();
         const expression2 = read_expression(parser2);
@@ -13804,7 +13850,7 @@ ${str}`);
     parser2.index = i;
     const pattern_string = parser2.template.slice(start, i);
     try {
-      let space_with_newline = parser2.template.slice(0, start).replace(/[^\n]/g, " ");
+      let space_with_newline = parser2.template.slice(0, start).replace(regex_not_newline_characters, " ");
       const first_space = space_with_newline.indexOf(" ");
       space_with_newline = space_with_newline.slice(0, first_space) + space_with_newline.slice(first_space + 1);
       return parse_expression_at(`${space_with_newline}(${pattern_string} = 1)`, start - 1).left;
@@ -13813,10 +13859,10 @@ ${str}`);
     }
   }
   function trim_start(str) {
-    return str.replace(start_whitespace, "");
+    return str.replace(regex_starts_with_whitespaces, "");
   }
   function trim_end(str) {
-    return str.replace(end_whitespace, "");
+    return str.replace(regex_ends_with_whitespaces, "");
   }
   function to_string(node2) {
     switch (node2.type) {
@@ -13870,6 +13916,7 @@ ${str}`);
       trim_whitespace(first_child, trim_before, trim_after);
     }
   }
+  var regex_whitespace_with_closing_curly_brace = /\s*}/;
   function mustache(parser2) {
     const start = parser2.index;
     parser2.index += 1;
@@ -13912,8 +13959,8 @@ ${str}`);
       }
       const char_before = parser2.template[block.start - 1];
       const char_after = parser2.template[parser2.index];
-      const trim_before = !char_before || whitespace.test(char_before);
-      const trim_after = !char_after || whitespace.test(char_after);
+      const trim_before = !char_before || regex_whitespace.test(char_before);
+      const trim_after = !char_after || regex_whitespace.test(char_after);
       trim_whitespace(block, trim_before, trim_after);
       block.end = parser2.index;
       parser2.stack.pop();
@@ -14065,7 +14112,7 @@ ${str}`);
       }
       const await_block_shorthand = type === "AwaitBlock" && parser2.eat("then");
       if (await_block_shorthand) {
-        if (parser2.match_regex(/\s*}/)) {
+        if (parser2.match_regex(regex_whitespace_with_closing_curly_brace)) {
           parser2.allow_whitespace();
         } else {
           parser2.require_whitespace();
@@ -14075,7 +14122,7 @@ ${str}`);
       }
       const await_block_catch_shorthand = !await_block_shorthand && type === "AwaitBlock" && parser2.eat("catch");
       if (await_block_catch_shorthand) {
-        if (parser2.match_regex(/\s*}/)) {
+        if (parser2.match_regex(regex_whitespace_with_closing_curly_brace)) {
           parser2.allow_whitespace();
         } else {
           parser2.require_whitespace();
@@ -14114,7 +14161,7 @@ ${str}`);
       });
     } else if (parser2.eat("@debug")) {
       let identifiers;
-      if (parser2.read(/\s*}/)) {
+      if (parser2.read(regex_whitespace_with_closing_curly_brace)) {
         identifiers = [];
       } else {
         const expression2 = read_expression(parser2);
@@ -14186,70 +14233,6 @@ ${str}`);
     }
     return text;
   }
-  var globals = /* @__PURE__ */ new Set([
-    "alert",
-    "Array",
-    "BigInt",
-    "Boolean",
-    "clearInterval",
-    "clearTimeout",
-    "confirm",
-    "console",
-    "Date",
-    "decodeURI",
-    "decodeURIComponent",
-    "document",
-    "Element",
-    "encodeURI",
-    "encodeURIComponent",
-    "Error",
-    "EvalError",
-    "Event",
-    "EventSource",
-    "fetch",
-    "FormData",
-    "global",
-    "globalThis",
-    "history",
-    "HTMLElement",
-    "Infinity",
-    "InternalError",
-    "Intl",
-    "isFinite",
-    "isNaN",
-    "JSON",
-    "localStorage",
-    "location",
-    "Map",
-    "Math",
-    "NaN",
-    "navigator",
-    "Node",
-    "Number",
-    "Object",
-    "parseFloat",
-    "parseInt",
-    "process",
-    "Promise",
-    "prompt",
-    "RangeError",
-    "ReferenceError",
-    "RegExp",
-    "sessionStorage",
-    "Set",
-    "setInterval",
-    "setTimeout",
-    "String",
-    "SVGElement",
-    "Symbol",
-    "SyntaxError",
-    "TypeError",
-    "undefined",
-    "URIError",
-    "URL",
-    "URLSearchParams",
-    "window"
-  ]);
   var reserved = /* @__PURE__ */ new Set([
     "arguments",
     "await",
@@ -14310,8 +14293,10 @@ ${str}`);
     }
     return true;
   }
+  var regex_non_standard_characters = /[^a-zA-Z0-9_]+/g;
+  var regex_starts_with_number = /^[0-9]/;
   function sanitize(name) {
-    return name.replace(/[^a-zA-Z0-9_]+/g, "_").replace(/^_/, "").replace(/_$/, "").replace(/^[0-9]/, "_$&");
+    return name.replace(regex_non_standard_characters, "_").replace(regex_starts_with_underscore, "").replace(regex_ends_with_underscore, "").replace(regex_starts_with_number, "_$&");
   }
   function getLocator(source, options) {
     if (options === void 0) {
@@ -14355,8 +14340,9 @@ ${str}`);
     }
     return getLocator(source, options)(search, options && options.startIndex);
   }
+  var regex_tabs = /^\t+/;
   function tabs_to_spaces(str) {
-    return str.replace(/^\t+/, (match) => match.split("	").join("  "));
+    return str.replace(regex_tabs, (match) => match.split("	").join("  "));
   }
   function get_code_frame(source, line, column) {
     const lines = source.split("\n");
@@ -14393,6 +14379,7 @@ ${this.frame}`;
     error2.frame = get_code_frame(props.source, start.line - 1, start.column);
     throw error2;
   }
+  var regex_position_indicator = / \(\d+:\d+\)$/;
   var Parser$1 = class {
     constructor(template, options) {
       this.index = 0;
@@ -14403,7 +14390,7 @@ ${this.frame}`;
       if (typeof template !== "string") {
         throw new TypeError("Template must be a string");
       }
-      this.template = template.replace(/\s+$/, "");
+      this.template = template.trimRight();
       this.filename = options.filename;
       this.customElement = options.customElement;
       this.html = {
@@ -14434,10 +14421,10 @@ ${this.frame}`;
       }
       if (this.html.children.length) {
         let start = this.html.children[0].start;
-        while (whitespace.test(template[start]))
+        while (regex_whitespace.test(template[start]))
           start += 1;
         let end = this.html.children[this.html.children.length - 1].end;
-        while (whitespace.test(template[end - 1]))
+        while (regex_whitespace.test(template[end - 1]))
           end -= 1;
         this.html.start = start;
         this.html.end = end;
@@ -14451,7 +14438,7 @@ ${this.frame}`;
     acorn_error(err) {
       this.error({
         code: "parse-error",
-        message: err.message.replace(/ \(\d+:\d+\)$/, "")
+        message: err.message.replace(regex_position_indicator, "")
       }, err.pos);
     }
     error({ code, message }, index = this.index) {
@@ -14476,19 +14463,19 @@ ${this.frame}`;
     match(str) {
       return this.template.slice(this.index, this.index + str.length) === str;
     }
-    match_regex(pattern2) {
-      const match = pattern2.exec(this.template.slice(this.index));
+    match_regex(pattern) {
+      const match = pattern.exec(this.template.slice(this.index));
       if (!match || match.index !== 0)
         return null;
       return match[0];
     }
     allow_whitespace() {
-      while (this.index < this.template.length && whitespace.test(this.template[this.index])) {
+      while (this.index < this.template.length && regex_whitespace.test(this.template[this.index])) {
         this.index++;
       }
     }
-    read(pattern2) {
-      const result = this.match_regex(pattern2);
+    read(pattern) {
+      const result = this.match_regex(pattern);
       if (result)
         this.index += result.length;
       return result;
@@ -14515,7 +14502,7 @@ ${this.frame}`;
       }
       return identifier;
     }
-    read_until(pattern2, error_message) {
+    read_until(pattern, error_message) {
       if (this.index >= this.template.length) {
         this.error(error_message || {
           code: "unexpected-eof",
@@ -14523,7 +14510,7 @@ ${this.frame}`;
         });
       }
       const start = this.index;
-      const match = pattern2.exec(this.template.slice(start));
+      const match = pattern.exec(this.template.slice(start));
       if (match) {
         this.index = start + match.index;
         return this.template.slice(start, this.index);
@@ -14532,7 +14519,7 @@ ${this.frame}`;
       return this.template.slice(start);
     }
     require_whitespace() {
-      if (!whitespace.test(this.template[this.index])) {
+      if (!regex_whitespace.test(this.template[this.index])) {
         this.error({
           code: "missing-whitespace",
           message: "Expected whitespace"
@@ -14562,7 +14549,7 @@ ${this.frame}`;
     };
   }
   function is_head(node2) {
-    return node2 && node2.type === "MemberExpression" && node2.object.name === "@_document" && node2.property.name === "head";
+    return node2 && node2.type === "MemberExpression" && node2.object["name"] === "@_document" && node2.property["name"] === "head";
   }
   var Block$1 = class {
     constructor(options) {
@@ -14843,7 +14830,7 @@ ${this.frame}`;
 						block: ${block},
 						id: ${this.name || "create_fragment"}.name,
 						type: "${this.type}",
-						source: "${this.comment ? this.comment.replace(/"/g, '\\"') : ""}",
+						source: "${this.comment ? this.comment.replace(regex_double_quotes, '\\"') : ""}",
 						ctx: #ctx
 					});
 					return ${block};` : b`
@@ -14972,7 +14959,7 @@ ${this.frame}`;
     }
     const start = locate2(c2);
     const loc = `(${start.line}:${start.column})`;
-    return `${loc} ${source.slice(c2, d)}`.replace(/\s/g, " ");
+    return `${loc} ${source.slice(c2, d)}`.replace(regex_whitespace_characters, " ");
   }
   var Node$1 = class {
     constructor(component, parent, _scope, info) {
@@ -15075,6 +15062,35 @@ ${this.frame}`;
       code: "a11y-aria-attributes",
       message: `A11y: <${name}> should not have aria-* attributes`
     }),
+    a11y_incorrect_attribute_type: (schema, attribute) => {
+      let message;
+      switch (schema.type) {
+        case "boolean":
+          message = `The value of '${attribute}' must be exactly one of true or false`;
+          break;
+        case "id":
+          message = `The value of '${attribute}' must be a string that represents a DOM element ID`;
+          break;
+        case "idlist":
+          message = `The value of '${attribute}' must be a space-separated list of strings that represent DOM element IDs`;
+          break;
+        case "tristate":
+          message = `The value of '${attribute}' must be exactly one of true, false, or mixed`;
+          break;
+        case "token":
+          message = `The value of '${attribute}' must be exactly one of ${(schema.values || []).join(", ")}`;
+          break;
+        case "tokenlist":
+          message = `The value of '${attribute}' must be a space-separated list of one or more of ${(schema.values || []).join(", ")}`;
+          break;
+        default:
+          message = `The value of '${attribute}' must be of type ${schema.type}`;
+      }
+      return {
+        code: "a11y-incorrect-aria-attribute-type",
+        message: `A11y: ${message}`
+      };
+    },
     a11y_unknown_aria_attribute: (attribute, suggestion) => ({
       code: "a11y-unknown-aria-attribute",
       message: `A11y: Unknown aria attribute 'aria-${attribute}'` + (suggestion ? ` (did you mean '${suggestion}'?)` : "")
@@ -15091,9 +15107,21 @@ ${this.frame}`;
       code: "a11y-unknown-role",
       message: `A11y: Unknown role '${role}'` + (suggestion ? ` (did you mean '${suggestion}'?)` : "")
     }),
+    a11y_no_abstract_role: (role) => ({
+      code: "a11y-no-abstract-role",
+      message: `A11y: Abstract role '${role}' is forbidden`
+    }),
     a11y_no_redundant_roles: (role) => ({
       code: "a11y-no-redundant-roles",
       message: `A11y: Redundant role '${role}'`
+    }),
+    a11y_no_interactive_element_to_noninteractive_role: (role, element) => ({
+      code: "a11y-no-interactive-element-to-noninteractive-role",
+      message: `A11y: <${element}> cannot have role '${role}'`
+    }),
+    a11y_role_has_required_aria_props: (role, props) => ({
+      code: "a11y-role-has-required-aria-props",
+      message: `A11y: Elements with the ARIA role "${role}" must have the following attributes defined: ${props.map((name) => `"${name}"`).join(", ")}`
     }),
     a11y_accesskey: {
       code: "a11y-accesskey",
@@ -15147,10 +15175,18 @@ ${this.frame}`;
       code: "a11y-mouse-events-have-key-events",
       message: `A11y: on:${event} must be accompanied by on:${accompanied_by}`
     }),
+    a11y_click_events_have_key_events: () => ({
+      code: "a11y-click-events-have-key-events",
+      message: "A11y: visible, non-interactive elements with an on:click event must be accompanied by an on:keydown, on:keyup, or on:keypress event."
+    }),
     a11y_missing_content: (name) => ({
       code: "a11y-missing-content",
       message: `A11y: <${name}> element should have child content`
     }),
+    a11y_no_noninteractive_tabindex: {
+      code: "a11y-no-noninteractive-tabindex",
+      message: "A11y: noninteractive element cannot have positive tabIndex value"
+    },
     redundant_event_modifier_for_touch: {
       code: "redundant-event-modifier",
       message: "Touch event handlers that don't use the 'event' object are passive by default"
@@ -15158,8 +15194,13 @@ ${this.frame}`;
     redundant_event_modifier_passive: {
       code: "redundant-event-modifier",
       message: "The passive modifier only works with wheel and touch events"
-    }
+    },
+    invalid_rest_eachblock_binding: (rest_element_name) => ({
+      code: "invalid-rest-eachblock-binding",
+      message: `...${rest_element_name} operator will create a new object and binding propogation with original object will not work`
+    })
   };
+  var regex_non_whitespace_characters = /[^ \r\n\f\v\t]/;
   var AbstractBlock = class extends Node$1 {
     constructor(component, parent, scope2, info) {
       super(component, parent, scope2, info);
@@ -15168,7 +15209,7 @@ ${this.frame}`;
       if (!this.children || this.children.length > 1)
         return;
       const child = this.children[0];
-      if (!child || child.type === "Text" && !/[^ \r\n\f\v\t]/.test(child.data)) {
+      if (!child || child.type === "Text" && !regex_non_whitespace_characters.test(child.data)) {
         this.component.warn(this, compiler_warnings.empty_block);
       }
     }
@@ -15614,6 +15655,10 @@ ${this.frame}`;
       code: "css-invalid-global-selector",
       message: ":global(...) must contain a single selector"
     },
+    css_invalid_selector: (selector2) => ({
+      code: "css-invalid-selector",
+      message: `Invalid selector "${selector2}"`
+    }),
     duplicate_animation: {
       code: "duplicate-animation",
       message: "An element can only have one 'animate' directive"
@@ -15657,8 +15702,13 @@ ${this.frame}`;
     invalid_component_style_directive: {
       code: "invalid-component-style-directive",
       message: "Style directives cannot be used on components"
-    }
+    },
+    invalid_style_directive_modifier: (valid) => ({
+      code: "invalid-style-directive-modifier",
+      message: `Valid modifiers for style directives are: ${valid}`
+    })
   };
+  var regex_contains_term_function_expression = /FunctionExpression/;
   var Expression = class {
     constructor(component, owner, template_scope, info, lazy) {
       this.type = "Expression";
@@ -15690,7 +15740,7 @@ ${this.frame}`;
           if (map.has(node2)) {
             scope2 = map.get(node2);
           }
-          if (!function_expression && /FunctionExpression/.test(node2.type)) {
+          if (!function_expression && regex_contains_term_function_expression.test(node2.type)) {
             function_expression = node2;
           }
           if (is_reference(node2, parent)) {
@@ -15733,11 +15783,13 @@ ${this.frame}`;
               deep = node2.left.type === "MemberExpression";
               names2 = extract_names(deep ? get_object(node2.left) : node2.left);
             } else if (node2.type === "UpdateExpression") {
+              deep = node2.argument.type === "MemberExpression";
               names2 = extract_names(get_object(node2.argument));
             }
           }
           if (names2) {
             names2.forEach((name) => {
+              var _a;
               if (template_scope.names.has(name)) {
                 if (template_scope.is_const(name)) {
                   component.error(node2, compiler_errors.invalid_const_update(name));
@@ -15752,8 +15804,23 @@ ${this.frame}`;
               } else {
                 component.add_reference(node2, name);
                 const variable = component.var_lookup.get(name);
-                if (variable)
+                if (variable) {
                   variable[deep ? "mutated" : "reassigned"] = true;
+                }
+                const declaration = (_a = scope2.find_owner(name)) === null || _a === void 0 ? void 0 : _a.declarations.get(name);
+                if (declaration) {
+                  if (declaration.kind === "const" && !deep) {
+                    component.error(node2, {
+                      code: "assignment-to-const",
+                      message: "You are assigning to a const"
+                    });
+                  }
+                } else if (variable && variable.writable === false && !deep) {
+                  component.error(node2, {
+                    code: "assignment-to-const",
+                    message: "You are assigning to a const"
+                  });
+                }
               }
             });
           }
@@ -15886,7 +15953,7 @@ ${this.frame}`;
                   node4 = node4.parent;
                 }
                 const func_expression = func_declaration[0];
-                if (node4.type === "InlineComponent") {
+                if (node4.type === "InlineComponent" || node4.type === "SlotTemplate") {
                   this.replace(func_expression);
                 } else {
                   const func_id = component.get_unique_name(id2.name + "_func");
@@ -15965,7 +16032,7 @@ ${this.frame}`;
     }
     return "func";
   }
-  function unpack_destructuring({ contexts, node: node2, modifier = (node3) => node3, default_modifier = (node3) => node3, scope: scope2, component }) {
+  function unpack_destructuring({ contexts, node: node2, modifier = (node3) => node3, default_modifier = (node3) => node3, scope: scope2, component, context_rest_properties }) {
     if (!node2)
       return;
     if (node2.type === "Identifier") {
@@ -15980,6 +16047,7 @@ ${this.frame}`;
         modifier,
         default_modifier
       });
+      context_rest_properties.set(node2.argument.name, node2);
     } else if (node2.type === "ArrayPattern") {
       node2.elements.forEach((element, i) => {
         if (element && element.type === "RestElement") {
@@ -15989,8 +16057,10 @@ ${this.frame}`;
             modifier: (node3) => x`${modifier(node3)}.slice(${i})`,
             default_modifier,
             scope: scope2,
-            component
+            component,
+            context_rest_properties
           });
+          context_rest_properties.set(element.argument.name, element);
         } else if (element && element.type === "AssignmentPattern") {
           const n2 = contexts.length;
           mark_referenced(element.right, scope2, component);
@@ -16000,7 +16070,8 @@ ${this.frame}`;
             modifier: (node3) => x`${modifier(node3)}[${i}]`,
             default_modifier: (node3, to_ctx) => x`${node3} !== undefined ? ${node3} : ${update_reference(contexts, n2, element.right, to_ctx)}`,
             scope: scope2,
-            component
+            component,
+            context_rest_properties
           });
         } else {
           unpack_destructuring({
@@ -16009,7 +16080,8 @@ ${this.frame}`;
             modifier: (node3) => x`${modifier(node3)}[${i}]`,
             default_modifier,
             scope: scope2,
-            component
+            component,
+            context_rest_properties
           });
         }
       });
@@ -16023,8 +16095,10 @@ ${this.frame}`;
             modifier: (node3) => x`@object_without_properties(${modifier(node3)}, [${used_properties}])`,
             default_modifier,
             scope: scope2,
-            component
+            component,
+            context_rest_properties
           });
+          context_rest_properties.set(property.argument.name, property);
         } else {
           const key = property.key;
           const value2 = property.value;
@@ -16038,7 +16112,8 @@ ${this.frame}`;
               modifier: (node3) => x`${modifier(node3)}.${key.name}`,
               default_modifier: (node3, to_ctx) => x`${node3} !== undefined ? ${node3} : ${update_reference(contexts, n2, value2.right, to_ctx)}`,
               scope: scope2,
-              component
+              component,
+              context_rest_properties
             });
           } else {
             unpack_destructuring({
@@ -16047,7 +16122,8 @@ ${this.frame}`;
               modifier: (node3) => x`${modifier(node3)}.${key.name}`,
               default_modifier,
               scope: scope2,
-              component
+              component,
+              context_rest_properties
             });
           }
         }
@@ -16095,6 +16171,7 @@ ${this.frame}`;
     constructor(component, parent, scope2, info) {
       super(component, parent, scope2, info);
       this.contexts = [];
+      this.context_rest_properties = /* @__PURE__ */ new Map();
       this.assignees = /* @__PURE__ */ new Set();
       this.dependencies = /* @__PURE__ */ new Set();
       if (!allowed_parents.has(parent.type)) {
@@ -16125,7 +16202,8 @@ ${this.frame}`;
         contexts: this.contexts,
         node: this.node.expression.left,
         scope: this.scope,
-        component: this.component
+        component: this.component,
+        context_rest_properties: this.context_rest_properties
       });
       this.expression = new Expression(this.component, this, this.scope, this.node.expression.right);
       this.contexts.forEach((context) => {
@@ -16164,22 +16242,24 @@ ${this.frame}`;
   var AwaitBlock = class extends Node$1 {
     constructor(component, parent, scope2, info) {
       super(component, parent, scope2, info);
+      this.context_rest_properties = /* @__PURE__ */ new Map();
       this.expression = new Expression(component, this, scope2, info.expression);
       this.then_node = info.value;
       this.catch_node = info.error;
       if (this.then_node) {
         this.then_contexts = [];
-        unpack_destructuring({ contexts: this.then_contexts, node: info.value, scope: scope2, component });
+        unpack_destructuring({ contexts: this.then_contexts, node: info.value, scope: scope2, component, context_rest_properties: this.context_rest_properties });
       }
       if (this.catch_node) {
         this.catch_contexts = [];
-        unpack_destructuring({ contexts: this.catch_contexts, node: info.error, scope: scope2, component });
+        unpack_destructuring({ contexts: this.catch_contexts, node: info.error, scope: scope2, component, context_rest_properties: this.context_rest_properties });
       }
       this.pending = new PendingBlock(component, this, scope2, info.pending);
       this.then = new ThenBlock(component, this, scope2, info.then);
       this.catch = new CatchBlock(component, this, scope2, info.catch);
     }
   };
+  var regex_contains_term_function_expression$1 = /FunctionExpression/;
   var EventHandler = class extends Node$1 {
     constructor(component, parent, template_scope, info) {
       super(component, parent, template_scope, info);
@@ -16190,7 +16270,7 @@ ${this.frame}`;
       if (info.expression) {
         this.expression = new Expression(component, this, template_scope, info.expression);
         this.uses_context = this.expression.uses_context;
-        if (/FunctionExpression/.test(info.expression.type) && info.expression.params.length === 0) {
+        if (regex_contains_term_function_expression$1.test(info.expression.type) && info.expression.params.length === 0) {
           this.can_make_passive = true;
         } else if (info.expression.type === "Identifier") {
           let node2 = component.node_for_declaration.get(info.expression.name);
@@ -16213,7 +16293,7 @@ ${this.frame}`;
         return false;
       }
       const node2 = this.expression.node;
-      if (/FunctionExpression/.test(node2.type)) {
+      if (regex_contains_term_function_expression$1.test(node2.type)) {
         return false;
       }
       return this.expression.dynamic_dependencies().length > 0;
@@ -16270,8 +16350,9 @@ ${this.frame}`;
       this.context_node = info.context;
       this.index = info.index;
       this.scope = scope2.child();
+      this.context_rest_properties = /* @__PURE__ */ new Map();
       this.contexts = [];
-      unpack_destructuring({ contexts: this.contexts, node: info.context, scope: scope2, component });
+      unpack_destructuring({ contexts: this.contexts, node: info.context, scope: scope2, component, context_rest_properties: this.context_rest_properties });
       this.contexts.forEach((context) => {
         this.scope.add(context.key.name, this.expression.dependencies, this);
       });
@@ -16313,11 +16394,13 @@ ${this.frame}`;
     "<": "&lt;",
     ">": "&gt;"
   };
+  var regex_html_characters_to_escape = /["'&<>]/g;
   function escape_html(html2) {
-    return String(html2).replace(/["'&<>]/g, (match) => escaped[match]);
+    return String(html2).replace(regex_html_characters_to_escape, (match) => escaped[match]);
   }
+  var regex_template_characters_to_escape = /(\${|`|\\)/g;
   function escape_template(str) {
-    return str.replace(/(\${|`|\\)/g, "\\$1");
+    return str.replace(regex_template_characters_to_escape, "\\$1");
   }
   function add_to_set(a, b2) {
     b2.forEach((item) => {
@@ -16407,6 +16490,8 @@ ${this.frame}`;
       this.raw_expression = clone(info.expression);
       const { name } = get_object(this.expression.node);
       this.is_contextual = Array.from(this.expression.references).some((name2) => scope2.names.has(name2));
+      if (this.is_contextual)
+        this.validate_binding_rest_properties(scope2);
       if (scope2.is_let(name)) {
         component.error(this, compiler_errors.invalid_binding_let);
         return;
@@ -16437,10 +16522,21 @@ ${this.frame}`;
         }
       }
       const type = parent.get_static_attribute_value("type");
-      this.is_readonly = dimensions.test(this.name) || isElement(parent) && (parent.is_media_node() && read_only_media_attributes.has(this.name) || parent.name === "input" && type === "file");
+      this.is_readonly = regex_dimensions.test(this.name) || isElement(parent) && (parent.is_media_node() && read_only_media_attributes.has(this.name) || parent.name === "input" && type === "file");
     }
     is_readonly_media_attribute() {
       return read_only_media_attributes.has(this.name);
+    }
+    validate_binding_rest_properties(scope2) {
+      this.expression.references.forEach((name) => {
+        const each_block = scope2.get_owner(name);
+        if (each_block && each_block.type === "EachBlock") {
+          const rest_node = each_block.context_rest_properties.get(name);
+          if (rest_node) {
+            this.component.warn(rest_node, compiler_warnings.invalid_rest_eachblock_binding(name));
+          }
+        }
+      });
     }
   };
   function isElement(node2) {
@@ -16520,10 +16616,17 @@ ${this.frame}`;
     literal2.quasis.push(quasi);
     return literal2;
   }
+  var valid_modifiers = /* @__PURE__ */ new Set(["important"]);
   var StyleDirective = class extends Node$1 {
     constructor(component, parent, scope2, info) {
       super(component, parent, scope2, info);
       this.name = info.name;
+      this.modifiers = new Set(info.modifiers);
+      for (const modifier of this.modifiers) {
+        if (!valid_modifiers.has(modifier)) {
+          component.error(this, compiler_errors.invalid_style_directive_modifier(list$1([...valid_modifiers])));
+        }
+      }
       if (info.value === true || info.value.length === 1 && info.value[0].type === "MustacheTag") {
         const identifier = info.value === true ? {
           type: "Identifier",
@@ -16539,6 +16642,9 @@ ${this.frame}`;
         this.should_cache = raw_expression.expressions.length > 0;
       }
     }
+    get important() {
+      return this.modifiers.has("important");
+    }
   };
   var elements_without_text = /* @__PURE__ */ new Set([
     "audio",
@@ -16548,6 +16654,7 @@ ${this.frame}`;
     "select",
     "video"
   ]);
+  var regex_ends_with_svg = /svg$/;
   var Text = class extends Node$1 {
     constructor(component, parent, scope2, info) {
       super(component, parent, scope2, info);
@@ -16555,7 +16662,7 @@ ${this.frame}`;
       this.synthetic = info.synthetic || false;
     }
     should_skip() {
-      if (/\S/.test(this.data))
+      if (regex_non_whitespace_character.test(this.data))
         return false;
       const parent_element = this.find_nearest(/(?:Element|InlineComponent|SlotTemplate|Head)/);
       if (!parent_element)
@@ -16564,7 +16671,7 @@ ${this.frame}`;
         return true;
       if (parent_element.type === "InlineComponent")
         return parent_element.children.length === 1 && this === parent_element.children[0];
-      if (/svg$/.test(parent_element.namespace)) {
+      if (regex_ends_with_svg.test(parent_element.namespace)) {
         if (this.prev && this.prev.type === "Element" && this.prev.name === "tspan")
           return false;
       }
@@ -16589,7 +16696,7 @@ ${this.frame}`;
   var foreign = "https://svelte.dev/docs#template-syntax-svelte-options";
   var html = "http://www.w3.org/1999/xhtml";
   var mathml = "http://www.w3.org/1998/Math/MathML";
-  var svg = "http://www.w3.org/2000/svg";
+  var svg$1 = "http://www.w3.org/2000/svg";
   var xlink = "http://www.w3.org/1999/xlink";
   var xml = "http://www.w3.org/XML/1998/namespace";
   var xmlns = "http://www.w3.org/2000/xmlns";
@@ -16604,12 +16711,12 @@ ${this.frame}`;
     foreign,
     html,
     mathml,
-    svg,
+    svg$1,
     xlink,
     xml,
     xmlns
   ];
-  var namespaces = { foreign, html, mathml, svg, xlink, xml, xmlns };
+  var namespaces = { foreign, html, mathml, svg: svg$1, xlink, xml, xmlns };
   var applicable = /* @__PURE__ */ new Set(["Identifier", "ObjectExpression", "ArrayExpression", "Property"]);
   var Let = class extends Node$1 {
     constructor(component, parent, scope2, info) {
@@ -16640,11 +16747,9139 @@ ${this.frame}`;
       }
     }
   };
-  var svg$1 = /^(?:altGlyph|altGlyphDef|altGlyphItem|animate|animateColor|animateMotion|animateTransform|circle|clipPath|color-profile|cursor|defs|desc|discard|ellipse|feBlend|feColorMatrix|feComponentTransfer|feComposite|feConvolveMatrix|feDiffuseLighting|feDisplacementMap|feDistantLight|feDropShadow|feFlood|feFuncA|feFuncB|feFuncG|feFuncR|feGaussianBlur|feImage|feMerge|feMergeNode|feMorphology|feOffset|fePointLight|feSpecularLighting|feSpotLight|feTile|feTurbulence|filter|font|font-face|font-face-format|font-face-name|font-face-src|font-face-uri|foreignObject|g|glyph|glyphRef|hatch|hatchpath|hkern|image|line|linearGradient|marker|mask|mesh|meshgradient|meshpatch|meshrow|metadata|missing-glyph|mpath|path|pattern|polygon|polyline|radialGradient|rect|set|solidcolor|stop|svg|switch|symbol|text|textPath|tref|tspan|unknown|use|view|vkern)$/;
+  function unwrapExports(x2) {
+    return x2 && x2.__esModule && Object.prototype.hasOwnProperty.call(x2, "default") ? x2["default"] : x2;
+  }
+  function createCommonjsModule(fn, module) {
+    return module = { exports: {} }, fn(module, module.exports), module.exports;
+  }
+  var ariaPropsMap_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    function _slicedToArray(arr, i) {
+      return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _unsupportedIterableToArray(arr, i) || _nonIterableRest();
+    }
+    function _nonIterableRest() {
+      throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+    }
+    function _unsupportedIterableToArray(o, minLen) {
+      if (!o)
+        return;
+      if (typeof o === "string")
+        return _arrayLikeToArray(o, minLen);
+      var n2 = Object.prototype.toString.call(o).slice(8, -1);
+      if (n2 === "Object" && o.constructor)
+        n2 = o.constructor.name;
+      if (n2 === "Map" || n2 === "Set")
+        return Array.from(o);
+      if (n2 === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n2))
+        return _arrayLikeToArray(o, minLen);
+    }
+    function _arrayLikeToArray(arr, len) {
+      if (len == null || len > arr.length)
+        len = arr.length;
+      for (var i = 0, arr2 = new Array(len); i < len; i++) {
+        arr2[i] = arr[i];
+      }
+      return arr2;
+    }
+    function _iterableToArrayLimit(arr, i) {
+      var _i = arr == null ? null : typeof Symbol !== "undefined" && arr[Symbol.iterator] || arr["@@iterator"];
+      if (_i == null)
+        return;
+      var _arr = [];
+      var _n = true;
+      var _d = false;
+      var _s, _e;
+      try {
+        for (_i = _i.call(arr); !(_n = (_s = _i.next()).done); _n = true) {
+          _arr.push(_s.value);
+          if (i && _arr.length === i)
+            break;
+        }
+      } catch (err) {
+        _d = true;
+        _e = err;
+      } finally {
+        try {
+          if (!_n && _i["return"] != null)
+            _i["return"]();
+        } finally {
+          if (_d)
+            throw _e;
+        }
+      }
+      return _arr;
+    }
+    function _arrayWithHoles(arr) {
+      if (Array.isArray(arr))
+        return arr;
+    }
+    var properties2 = [["aria-activedescendant", {
+      "type": "id"
+    }], ["aria-atomic", {
+      "type": "boolean"
+    }], ["aria-autocomplete", {
+      "type": "token",
+      "values": ["inline", "list", "both", "none"]
+    }], ["aria-busy", {
+      "type": "boolean"
+    }], ["aria-checked", {
+      "type": "tristate"
+    }], ["aria-colcount", {
+      type: "integer"
+    }], ["aria-colindex", {
+      type: "integer"
+    }], ["aria-colspan", {
+      type: "integer"
+    }], ["aria-controls", {
+      "type": "idlist"
+    }], ["aria-current", {
+      type: "token",
+      values: ["page", "step", "location", "date", "time", true, false]
+    }], ["aria-describedby", {
+      "type": "idlist"
+    }], ["aria-details", {
+      "type": "id"
+    }], ["aria-disabled", {
+      "type": "boolean"
+    }], ["aria-dropeffect", {
+      "type": "tokenlist",
+      "values": ["copy", "execute", "link", "move", "none", "popup"]
+    }], ["aria-errormessage", {
+      "type": "id"
+    }], ["aria-expanded", {
+      "type": "boolean",
+      "allowundefined": true
+    }], ["aria-flowto", {
+      "type": "idlist"
+    }], ["aria-grabbed", {
+      "type": "boolean",
+      "allowundefined": true
+    }], ["aria-haspopup", {
+      "type": "token",
+      "values": [false, true, "menu", "listbox", "tree", "grid", "dialog"]
+    }], ["aria-hidden", {
+      "type": "boolean",
+      "allowundefined": true
+    }], ["aria-invalid", {
+      "type": "token",
+      "values": ["grammar", false, "spelling", true]
+    }], ["aria-keyshortcuts", {
+      type: "string"
+    }], ["aria-label", {
+      "type": "string"
+    }], ["aria-labelledby", {
+      "type": "idlist"
+    }], ["aria-level", {
+      "type": "integer"
+    }], ["aria-live", {
+      "type": "token",
+      "values": ["assertive", "off", "polite"]
+    }], ["aria-modal", {
+      type: "boolean"
+    }], ["aria-multiline", {
+      "type": "boolean"
+    }], ["aria-multiselectable", {
+      "type": "boolean"
+    }], ["aria-orientation", {
+      "type": "token",
+      "values": ["vertical", "undefined", "horizontal"]
+    }], ["aria-owns", {
+      "type": "idlist"
+    }], ["aria-placeholder", {
+      type: "string"
+    }], ["aria-posinset", {
+      "type": "integer"
+    }], ["aria-pressed", {
+      "type": "tristate"
+    }], ["aria-readonly", {
+      "type": "boolean"
+    }], ["aria-relevant", {
+      "type": "tokenlist",
+      "values": ["additions", "all", "removals", "text"]
+    }], ["aria-required", {
+      "type": "boolean"
+    }], ["aria-roledescription", {
+      type: "string"
+    }], ["aria-rowcount", {
+      type: "integer"
+    }], ["aria-rowindex", {
+      type: "integer"
+    }], ["aria-rowspan", {
+      type: "integer"
+    }], ["aria-selected", {
+      "type": "boolean",
+      "allowundefined": true
+    }], ["aria-setsize", {
+      "type": "integer"
+    }], ["aria-sort", {
+      "type": "token",
+      "values": ["ascending", "descending", "none", "other"]
+    }], ["aria-valuemax", {
+      "type": "number"
+    }], ["aria-valuemin", {
+      "type": "number"
+    }], ["aria-valuenow", {
+      "type": "number"
+    }], ["aria-valuetext", {
+      "type": "string"
+    }]];
+    var ariaPropsMap = {
+      entries: function entries() {
+        return properties2;
+      },
+      get: function get(key) {
+        var item = properties2.find(function(tuple) {
+          return tuple[0] === key ? true : false;
+        });
+        return item && item[1];
+      },
+      has: function has2(key) {
+        return !!this.get(key);
+      },
+      keys: function keys() {
+        return properties2.map(function(_ref) {
+          var _ref2 = _slicedToArray(_ref, 1), key = _ref2[0];
+          return key;
+        });
+      },
+      values: function values() {
+        return properties2.map(function(_ref3) {
+          var _ref4 = _slicedToArray(_ref3, 2), values2 = _ref4[1];
+          return values2;
+        });
+      }
+    };
+    var _default2 = ariaPropsMap;
+    exports.default = _default2;
+  });
+  unwrapExports(ariaPropsMap_1);
+  var domMap_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    function _slicedToArray(arr, i) {
+      return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _unsupportedIterableToArray(arr, i) || _nonIterableRest();
+    }
+    function _nonIterableRest() {
+      throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+    }
+    function _unsupportedIterableToArray(o, minLen) {
+      if (!o)
+        return;
+      if (typeof o === "string")
+        return _arrayLikeToArray(o, minLen);
+      var n2 = Object.prototype.toString.call(o).slice(8, -1);
+      if (n2 === "Object" && o.constructor)
+        n2 = o.constructor.name;
+      if (n2 === "Map" || n2 === "Set")
+        return Array.from(o);
+      if (n2 === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n2))
+        return _arrayLikeToArray(o, minLen);
+    }
+    function _arrayLikeToArray(arr, len) {
+      if (len == null || len > arr.length)
+        len = arr.length;
+      for (var i = 0, arr2 = new Array(len); i < len; i++) {
+        arr2[i] = arr[i];
+      }
+      return arr2;
+    }
+    function _iterableToArrayLimit(arr, i) {
+      var _i = arr == null ? null : typeof Symbol !== "undefined" && arr[Symbol.iterator] || arr["@@iterator"];
+      if (_i == null)
+        return;
+      var _arr = [];
+      var _n = true;
+      var _d = false;
+      var _s, _e;
+      try {
+        for (_i = _i.call(arr); !(_n = (_s = _i.next()).done); _n = true) {
+          _arr.push(_s.value);
+          if (i && _arr.length === i)
+            break;
+        }
+      } catch (err) {
+        _d = true;
+        _e = err;
+      } finally {
+        try {
+          if (!_n && _i["return"] != null)
+            _i["return"]();
+        } finally {
+          if (_d)
+            throw _e;
+        }
+      }
+      return _arr;
+    }
+    function _arrayWithHoles(arr) {
+      if (Array.isArray(arr))
+        return arr;
+    }
+    var dom2 = [["a", {
+      reserved: false
+    }], ["abbr", {
+      reserved: false
+    }], ["acronym", {
+      reserved: false
+    }], ["address", {
+      reserved: false
+    }], ["applet", {
+      reserved: false
+    }], ["area", {
+      reserved: false
+    }], ["article", {
+      reserved: false
+    }], ["aside", {
+      reserved: false
+    }], ["audio", {
+      reserved: false
+    }], ["b", {
+      reserved: false
+    }], ["base", {
+      reserved: true
+    }], ["bdi", {
+      reserved: false
+    }], ["bdo", {
+      reserved: false
+    }], ["big", {
+      reserved: false
+    }], ["blink", {
+      reserved: false
+    }], ["blockquote", {
+      reserved: false
+    }], ["body", {
+      reserved: false
+    }], ["br", {
+      reserved: false
+    }], ["button", {
+      reserved: false
+    }], ["canvas", {
+      reserved: false
+    }], ["caption", {
+      reserved: false
+    }], ["center", {
+      reserved: false
+    }], ["cite", {
+      reserved: false
+    }], ["code", {
+      reserved: false
+    }], ["col", {
+      reserved: true
+    }], ["colgroup", {
+      reserved: true
+    }], ["content", {
+      reserved: false
+    }], ["data", {
+      reserved: false
+    }], ["datalist", {
+      reserved: false
+    }], ["dd", {
+      reserved: false
+    }], ["del", {
+      reserved: false
+    }], ["details", {
+      reserved: false
+    }], ["dfn", {
+      reserved: false
+    }], ["dialog", {
+      reserved: false
+    }], ["dir", {
+      reserved: false
+    }], ["div", {
+      reserved: false
+    }], ["dl", {
+      reserved: false
+    }], ["dt", {
+      reserved: false
+    }], ["em", {
+      reserved: false
+    }], ["embed", {
+      reserved: false
+    }], ["fieldset", {
+      reserved: false
+    }], ["figcaption", {
+      reserved: false
+    }], ["figure", {
+      reserved: false
+    }], ["font", {
+      reserved: false
+    }], ["footer", {
+      reserved: false
+    }], ["form", {
+      reserved: false
+    }], ["frame", {
+      reserved: false
+    }], ["frameset", {
+      reserved: false
+    }], ["h1", {
+      reserved: false
+    }], ["h2", {
+      reserved: false
+    }], ["h3", {
+      reserved: false
+    }], ["h4", {
+      reserved: false
+    }], ["h5", {
+      reserved: false
+    }], ["h6", {
+      reserved: false
+    }], ["head", {
+      reserved: true
+    }], ["header", {
+      reserved: false
+    }], ["hgroup", {
+      reserved: false
+    }], ["hr", {
+      reserved: false
+    }], ["html", {
+      reserved: true
+    }], ["i", {
+      reserved: false
+    }], ["iframe", {
+      reserved: false
+    }], ["img", {
+      reserved: false
+    }], ["input", {
+      reserved: false
+    }], ["ins", {
+      reserved: false
+    }], ["kbd", {
+      reserved: false
+    }], ["keygen", {
+      reserved: false
+    }], ["label", {
+      reserved: false
+    }], ["legend", {
+      reserved: false
+    }], ["li", {
+      reserved: false
+    }], ["link", {
+      reserved: true
+    }], ["main", {
+      reserved: false
+    }], ["map", {
+      reserved: false
+    }], ["mark", {
+      reserved: false
+    }], ["marquee", {
+      reserved: false
+    }], ["menu", {
+      reserved: false
+    }], ["menuitem", {
+      reserved: false
+    }], ["meta", {
+      reserved: true
+    }], ["meter", {
+      reserved: false
+    }], ["nav", {
+      reserved: false
+    }], ["noembed", {
+      reserved: true
+    }], ["noscript", {
+      reserved: true
+    }], ["object", {
+      reserved: false
+    }], ["ol", {
+      reserved: false
+    }], ["optgroup", {
+      reserved: false
+    }], ["option", {
+      reserved: false
+    }], ["output", {
+      reserved: false
+    }], ["p", {
+      reserved: false
+    }], ["param", {
+      reserved: true
+    }], ["picture", {
+      reserved: true
+    }], ["pre", {
+      reserved: false
+    }], ["progress", {
+      reserved: false
+    }], ["q", {
+      reserved: false
+    }], ["rp", {
+      reserved: false
+    }], ["rt", {
+      reserved: false
+    }], ["rtc", {
+      reserved: false
+    }], ["ruby", {
+      reserved: false
+    }], ["s", {
+      reserved: false
+    }], ["samp", {
+      reserved: false
+    }], ["script", {
+      reserved: true
+    }], ["section", {
+      reserved: false
+    }], ["select", {
+      reserved: false
+    }], ["small", {
+      reserved: false
+    }], ["source", {
+      reserved: true
+    }], ["spacer", {
+      reserved: false
+    }], ["span", {
+      reserved: false
+    }], ["strike", {
+      reserved: false
+    }], ["strong", {
+      reserved: false
+    }], ["style", {
+      reserved: true
+    }], ["sub", {
+      reserved: false
+    }], ["summary", {
+      reserved: false
+    }], ["sup", {
+      reserved: false
+    }], ["table", {
+      reserved: false
+    }], ["tbody", {
+      reserved: false
+    }], ["td", {
+      reserved: false
+    }], ["textarea", {
+      reserved: false
+    }], ["tfoot", {
+      reserved: false
+    }], ["th", {
+      reserved: false
+    }], ["thead", {
+      reserved: false
+    }], ["time", {
+      reserved: false
+    }], ["title", {
+      reserved: true
+    }], ["tr", {
+      reserved: false
+    }], ["track", {
+      reserved: true
+    }], ["tt", {
+      reserved: false
+    }], ["u", {
+      reserved: false
+    }], ["ul", {
+      reserved: false
+    }], ["var", {
+      reserved: false
+    }], ["video", {
+      reserved: false
+    }], ["wbr", {
+      reserved: false
+    }], ["xmp", {
+      reserved: false
+    }]];
+    var domMap = {
+      entries: function entries() {
+        return dom2;
+      },
+      get: function get(key) {
+        var item = dom2.find(function(tuple) {
+          return tuple[0] === key ? true : false;
+        });
+        return item && item[1];
+      },
+      has: function has2(key) {
+        return !!this.get(key);
+      },
+      keys: function keys() {
+        return dom2.map(function(_ref) {
+          var _ref2 = _slicedToArray(_ref, 1), key = _ref2[0];
+          return key;
+        });
+      },
+      values: function values() {
+        return dom2.map(function(_ref3) {
+          var _ref4 = _slicedToArray(_ref3, 2), values2 = _ref4[1];
+          return values2;
+        });
+      }
+    };
+    var _default2 = domMap;
+    exports.default = _default2;
+  });
+  unwrapExports(domMap_1);
+  var commandRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var commandRole = {
+      abstract: true,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          name: "menuitem"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "widget"]]
+    };
+    var _default2 = commandRole;
+    exports.default = _default2;
+  });
+  unwrapExports(commandRole_1);
+  var compositeRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var compositeRole = {
+      abstract: true,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-activedescendant": null,
+        "aria-disabled": null
+      },
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "widget"]]
+    };
+    var _default2 = compositeRole;
+    exports.default = _default2;
+  });
+  unwrapExports(compositeRole_1);
+  var inputRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var inputRole = {
+      abstract: true,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "input"
+        },
+        module: "XForms"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "widget"]]
+    };
+    var _default2 = inputRole;
+    exports.default = _default2;
+  });
+  unwrapExports(inputRole_1);
+  var landmarkRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var landmarkRole = {
+      abstract: true,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = landmarkRole;
+    exports.default = _default2;
+  });
+  unwrapExports(landmarkRole_1);
+  var rangeRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var rangeRole = {
+      abstract: true,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-valuemax": null,
+        "aria-valuemin": null,
+        "aria-valuenow": null
+      },
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure"]]
+    };
+    var _default2 = rangeRole;
+    exports.default = _default2;
+  });
+  unwrapExports(rangeRole_1);
+  var roletypeRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var roletypeRole = {
+      abstract: true,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: [],
+      prohibitedProps: [],
+      props: {
+        "aria-atomic": null,
+        "aria-busy": null,
+        "aria-controls": null,
+        "aria-current": null,
+        "aria-describedby": null,
+        "aria-details": null,
+        "aria-dropeffect": null,
+        "aria-flowto": null,
+        "aria-grabbed": null,
+        "aria-hidden": null,
+        "aria-keyshortcuts": null,
+        "aria-label": null,
+        "aria-labelledby": null,
+        "aria-live": null,
+        "aria-owns": null,
+        "aria-relevant": null,
+        "aria-roledescription": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "rel"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "role"
+        },
+        module: "XHTML"
+      }, {
+        concept: {
+          name: "type"
+        },
+        module: "Dublin Core"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: []
+    };
+    var _default2 = roletypeRole;
+    exports.default = _default2;
+  });
+  unwrapExports(roletypeRole_1);
+  var sectionRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var sectionRole = {
+      abstract: true,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: [],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          name: "frontmatter"
+        },
+        module: "DTB"
+      }, {
+        concept: {
+          name: "level"
+        },
+        module: "DTB"
+      }, {
+        concept: {
+          name: "level"
+        },
+        module: "SMIL"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure"]]
+    };
+    var _default2 = sectionRole;
+    exports.default = _default2;
+  });
+  unwrapExports(sectionRole_1);
+  var sectionheadRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var sectionheadRole = {
+      abstract: true,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author", "contents"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure"]]
+    };
+    var _default2 = sectionheadRole;
+    exports.default = _default2;
+  });
+  unwrapExports(sectionheadRole_1);
+  var selectRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var selectRole = {
+      abstract: true,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-orientation": null
+      },
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "widget", "composite"], ["roletype", "structure", "section", "group"]]
+    };
+    var _default2 = selectRole;
+    exports.default = _default2;
+  });
+  unwrapExports(selectRole_1);
+  var structureRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var structureRole = {
+      abstract: true,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: [],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype"]]
+    };
+    var _default2 = structureRole;
+    exports.default = _default2;
+  });
+  unwrapExports(structureRole_1);
+  var widgetRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var widgetRole = {
+      abstract: true,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: [],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype"]]
+    };
+    var _default2 = widgetRole;
+    exports.default = _default2;
+  });
+  unwrapExports(widgetRole_1);
+  var windowRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var windowRole = {
+      abstract: true,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-modal": null
+      },
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype"]]
+    };
+    var _default2 = windowRole;
+    exports.default = _default2;
+  });
+  unwrapExports(windowRole_1);
+  var ariaAbstractRoles_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var _commandRole = _interopRequireDefault(commandRole_1);
+    var _compositeRole = _interopRequireDefault(compositeRole_1);
+    var _inputRole = _interopRequireDefault(inputRole_1);
+    var _landmarkRole = _interopRequireDefault(landmarkRole_1);
+    var _rangeRole = _interopRequireDefault(rangeRole_1);
+    var _roletypeRole = _interopRequireDefault(roletypeRole_1);
+    var _sectionRole = _interopRequireDefault(sectionRole_1);
+    var _sectionheadRole = _interopRequireDefault(sectionheadRole_1);
+    var _selectRole = _interopRequireDefault(selectRole_1);
+    var _structureRole = _interopRequireDefault(structureRole_1);
+    var _widgetRole = _interopRequireDefault(widgetRole_1);
+    var _windowRole = _interopRequireDefault(windowRole_1);
+    function _interopRequireDefault(obj) {
+      return obj && obj.__esModule ? obj : { default: obj };
+    }
+    var ariaAbstractRoles = [["command", _commandRole.default], ["composite", _compositeRole.default], ["input", _inputRole.default], ["landmark", _landmarkRole.default], ["range", _rangeRole.default], ["roletype", _roletypeRole.default], ["section", _sectionRole.default], ["sectionhead", _sectionheadRole.default], ["select", _selectRole.default], ["structure", _structureRole.default], ["widget", _widgetRole.default], ["window", _windowRole.default]];
+    var _default2 = ariaAbstractRoles;
+    exports.default = _default2;
+  });
+  unwrapExports(ariaAbstractRoles_1);
+  var alertRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var alertRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-atomic": "true",
+        "aria-live": "assertive"
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "alert"
+        },
+        module: "XForms"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = alertRole;
+    exports.default = _default2;
+  });
+  unwrapExports(alertRole_1);
+  var alertdialogRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var alertdialogRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          name: "alert"
+        },
+        module: "XForms"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "alert"], ["roletype", "window", "dialog"]]
+    };
+    var _default2 = alertdialogRole;
+    exports.default = _default2;
+  });
+  unwrapExports(alertdialogRole_1);
+  var applicationRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var applicationRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-activedescendant": null,
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "Device Independence Delivery Unit"
+        }
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure"]]
+    };
+    var _default2 = applicationRole;
+    exports.default = _default2;
+  });
+  unwrapExports(applicationRole_1);
+  var articleRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var articleRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-posinset": null,
+        "aria-setsize": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "article"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "document"]]
+    };
+    var _default2 = articleRole;
+    exports.default = _default2;
+  });
+  unwrapExports(articleRole_1);
+  var bannerRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var bannerRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          constraints: ["direct descendant of document"],
+          name: "header"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = bannerRole;
+    exports.default = _default2;
+  });
+  unwrapExports(bannerRole_1);
+  var blockquoteRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var blockquoteRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = blockquoteRole;
+    exports.default = _default2;
+  });
+  unwrapExports(blockquoteRole_1);
+  var buttonRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var buttonRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: true,
+      nameFrom: ["author", "contents"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-pressed": null
+      },
+      relatedConcepts: [{
+        concept: {
+          attributes: [{
+            constraints: ["set"],
+            name: "aria-pressed"
+          }, {
+            name: "type",
+            value: "checkbox"
+          }],
+          name: "input"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            name: "aria-expanded",
+            value: "false"
+          }],
+          name: "summary"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            name: "aria-expanded",
+            value: "true"
+          }],
+          constraints: ["direct descendant of details element with the open attribute defined"],
+          name: "summary"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            name: "type",
+            value: "button"
+          }],
+          name: "input"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            name: "type",
+            value: "image"
+          }],
+          name: "input"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            name: "type",
+            value: "reset"
+          }],
+          name: "input"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            name: "type",
+            value: "submit"
+          }],
+          name: "input"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "button"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "trigger"
+        },
+        module: "XForms"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "widget", "command"]]
+    };
+    var _default2 = buttonRole;
+    exports.default = _default2;
+  });
+  unwrapExports(buttonRole_1);
+  var captionRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var captionRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["prohibited"],
+      prohibitedProps: ["aria-label", "aria-labelledby"],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: ["figure", "grid", "table"],
+      requiredContextRole: ["figure", "grid", "table"],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = captionRole;
+    exports.default = _default2;
+  });
+  unwrapExports(captionRole_1);
+  var cellRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var cellRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author", "contents"],
+      prohibitedProps: [],
+      props: {
+        "aria-colindex": null,
+        "aria-colspan": null,
+        "aria-rowindex": null,
+        "aria-rowspan": null
+      },
+      relatedConcepts: [{
+        concept: {
+          constraints: ["descendant of table"],
+          name: "td"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: ["row"],
+      requiredContextRole: ["row"],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = cellRole;
+    exports.default = _default2;
+  });
+  unwrapExports(cellRole_1);
+  var checkboxRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var checkboxRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: true,
+      nameFrom: ["author", "contents"],
+      prohibitedProps: [],
+      props: {
+        "aria-checked": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-invalid": null,
+        "aria-readonly": null,
+        "aria-required": null
+      },
+      relatedConcepts: [{
+        concept: {
+          attributes: [{
+            name: "type",
+            value: "checkbox"
+          }],
+          name: "input"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "option"
+        },
+        module: "ARIA"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {
+        "aria-checked": null
+      },
+      superClass: [["roletype", "widget", "input"]]
+    };
+    var _default2 = checkboxRole;
+    exports.default = _default2;
+  });
+  unwrapExports(checkboxRole_1);
+  var codeRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var codeRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["prohibited"],
+      prohibitedProps: ["aria-label", "aria-labelledby"],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = codeRole;
+    exports.default = _default2;
+  });
+  unwrapExports(codeRole_1);
+  var columnheaderRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var columnheaderRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author", "contents"],
+      prohibitedProps: [],
+      props: {
+        "aria-sort": null
+      },
+      relatedConcepts: [{
+        attributes: [{
+          name: "scope",
+          value: "col"
+        }],
+        concept: {
+          name: "th"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: ["row"],
+      requiredContextRole: ["row"],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "cell"], ["roletype", "structure", "section", "cell", "gridcell"], ["roletype", "widget", "gridcell"], ["roletype", "structure", "sectionhead"]]
+    };
+    var _default2 = columnheaderRole;
+    exports.default = _default2;
+  });
+  unwrapExports(columnheaderRole_1);
+  var comboboxRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var comboboxRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-activedescendant": null,
+        "aria-autocomplete": null,
+        "aria-errormessage": null,
+        "aria-invalid": null,
+        "aria-readonly": null,
+        "aria-required": null,
+        "aria-expanded": "false",
+        "aria-haspopup": "listbox"
+      },
+      relatedConcepts: [{
+        concept: {
+          attributes: [{
+            constraints: ["set"],
+            name: "list"
+          }, {
+            name: "type",
+            value: "email"
+          }],
+          name: "input"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            constraints: ["set"],
+            name: "list"
+          }, {
+            name: "type",
+            value: "search"
+          }],
+          name: "input"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            constraints: ["set"],
+            name: "list"
+          }, {
+            name: "type",
+            value: "tel"
+          }],
+          name: "input"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            constraints: ["set"],
+            name: "list"
+          }, {
+            name: "type",
+            value: "text"
+          }],
+          name: "input"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            constraints: ["set"],
+            name: "list"
+          }, {
+            name: "type",
+            value: "url"
+          }],
+          name: "input"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            constraints: ["set"],
+            name: "list"
+          }, {
+            name: "type",
+            value: "url"
+          }],
+          name: "input"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            constraints: ["undefined"],
+            name: "multiple"
+          }, {
+            constraints: ["undefined"],
+            name: "size"
+          }],
+          name: "select"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            constraints: ["undefined"],
+            name: "multiple"
+          }, {
+            name: "size",
+            value: 1
+          }],
+          name: "select"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "select"
+        },
+        module: "XForms"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {
+        "aria-controls": null,
+        "aria-expanded": "false"
+      },
+      superClass: [["roletype", "widget", "input"]]
+    };
+    var _default2 = comboboxRole;
+    exports.default = _default2;
+  });
+  unwrapExports(comboboxRole_1);
+  var complementaryRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var complementaryRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          name: "aside"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = complementaryRole;
+    exports.default = _default2;
+  });
+  unwrapExports(complementaryRole_1);
+  var contentinfoRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var contentinfoRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          constraints: ["direct descendant of document"],
+          name: "footer"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = contentinfoRole;
+    exports.default = _default2;
+  });
+  unwrapExports(contentinfoRole_1);
+  var definitionRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var definitionRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          name: "dd"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = definitionRole;
+    exports.default = _default2;
+  });
+  unwrapExports(definitionRole_1);
+  var deletionRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var deletionRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["prohibited"],
+      prohibitedProps: ["aria-label", "aria-labelledby"],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = deletionRole;
+    exports.default = _default2;
+  });
+  unwrapExports(deletionRole_1);
+  var dialogRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var dialogRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          name: "dialog"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "window"]]
+    };
+    var _default2 = dialogRole;
+    exports.default = _default2;
+  });
+  unwrapExports(dialogRole_1);
+  var directoryRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var directoryRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        module: "DAISY Guide"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "list"]]
+    };
+    var _default2 = directoryRole;
+    exports.default = _default2;
+  });
+  unwrapExports(directoryRole_1);
+  var documentRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var documentRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          name: "Device Independence Delivery Unit"
+        }
+      }, {
+        concept: {
+          name: "body"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure"]]
+    };
+    var _default2 = documentRole;
+    exports.default = _default2;
+  });
+  unwrapExports(documentRole_1);
+  var emphasisRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var emphasisRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["prohibited"],
+      prohibitedProps: ["aria-label", "aria-labelledby"],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = emphasisRole;
+    exports.default = _default2;
+  });
+  unwrapExports(emphasisRole_1);
+  var feedRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var feedRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [["article"]],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "list"]]
+    };
+    var _default2 = feedRole;
+    exports.default = _default2;
+  });
+  unwrapExports(feedRole_1);
+  var figureRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var figureRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          name: "figure"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = figureRole;
+    exports.default = _default2;
+  });
+  unwrapExports(figureRole_1);
+  var formRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var formRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          attributes: [{
+            constraints: ["set"],
+            name: "aria-label"
+          }],
+          name: "form"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            constraints: ["set"],
+            name: "aria-labelledby"
+          }],
+          name: "form"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            constraints: ["set"],
+            name: "name"
+          }],
+          name: "form"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = formRole;
+    exports.default = _default2;
+  });
+  unwrapExports(formRole_1);
+  var genericRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var genericRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["prohibited"],
+      prohibitedProps: ["aria-label", "aria-labelledby"],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          name: "span"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "div"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure"]]
+    };
+    var _default2 = genericRole;
+    exports.default = _default2;
+  });
+  unwrapExports(genericRole_1);
+  var gridRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var gridRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-multiselectable": null,
+        "aria-readonly": null
+      },
+      relatedConcepts: [{
+        concept: {
+          attributes: [{
+            name: "role",
+            value: "grid"
+          }],
+          name: "table"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [["row"], ["row", "rowgroup"]],
+      requiredProps: {},
+      superClass: [["roletype", "widget", "composite"], ["roletype", "structure", "section", "table"]]
+    };
+    var _default2 = gridRole;
+    exports.default = _default2;
+  });
+  unwrapExports(gridRole_1);
+  var gridcellRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var gridcellRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author", "contents"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null,
+        "aria-readonly": null,
+        "aria-required": null,
+        "aria-selected": null
+      },
+      relatedConcepts: [{
+        concept: {
+          attributes: [{
+            name: "role",
+            value: "gridcell"
+          }],
+          name: "td"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: ["row"],
+      requiredContextRole: ["row"],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "cell"], ["roletype", "widget"]]
+    };
+    var _default2 = gridcellRole;
+    exports.default = _default2;
+  });
+  unwrapExports(gridcellRole_1);
+  var groupRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var groupRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-activedescendant": null,
+        "aria-disabled": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "details"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "fieldset"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "optgroup"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = groupRole;
+    exports.default = _default2;
+  });
+  unwrapExports(groupRole_1);
+  var headingRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var headingRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author", "contents"],
+      prohibitedProps: [],
+      props: {
+        "aria-level": "2"
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "h1"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "h2"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "h3"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "h4"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "h5"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "h6"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {
+        "aria-level": "2"
+      },
+      superClass: [["roletype", "structure", "sectionhead"]]
+    };
+    var _default2 = headingRole;
+    exports.default = _default2;
+  });
+  unwrapExports(headingRole_1);
+  var imgRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var imgRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: true,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          attributes: [{
+            constraints: ["set"],
+            name: "alt"
+          }],
+          name: "img"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            constraints: ["undefined"],
+            name: "alt"
+          }],
+          name: "img"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "imggroup"
+        },
+        module: "DTB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = imgRole;
+    exports.default = _default2;
+  });
+  unwrapExports(imgRole_1);
+  var insertionRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var insertionRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["prohibited"],
+      prohibitedProps: ["aria-label", "aria-labelledby"],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = insertionRole;
+    exports.default = _default2;
+  });
+  unwrapExports(insertionRole_1);
+  var linkRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var linkRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author", "contents"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-expanded": null,
+        "aria-haspopup": null
+      },
+      relatedConcepts: [{
+        concept: {
+          attributes: [{
+            name: "href"
+          }],
+          name: "a"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            name: "href"
+          }],
+          name: "area"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            name: "href"
+          }],
+          name: "link"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "widget", "command"]]
+    };
+    var _default2 = linkRole;
+    exports.default = _default2;
+  });
+  unwrapExports(linkRole_1);
+  var listRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var listRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          name: "menu"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "ol"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "ul"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [["listitem"]],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = listRole;
+    exports.default = _default2;
+  });
+  unwrapExports(listRole_1);
+  var listboxRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var listboxRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-invalid": null,
+        "aria-multiselectable": null,
+        "aria-readonly": null,
+        "aria-required": null,
+        "aria-orientation": "vertical"
+      },
+      relatedConcepts: [{
+        concept: {
+          attributes: [{
+            constraints: [">1"],
+            name: "size"
+          }, {
+            name: "multiple"
+          }],
+          name: "select"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            constraints: [">1"],
+            name: "size"
+          }],
+          name: "select"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            name: "multiple"
+          }],
+          name: "select"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "datalist"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "list"
+        },
+        module: "ARIA"
+      }, {
+        concept: {
+          name: "select"
+        },
+        module: "XForms"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [["option", "group"], ["option"]],
+      requiredProps: {},
+      superClass: [["roletype", "widget", "composite", "select"], ["roletype", "structure", "section", "group", "select"]]
+    };
+    var _default2 = listboxRole;
+    exports.default = _default2;
+  });
+  unwrapExports(listboxRole_1);
+  var listitemRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var listitemRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-level": null,
+        "aria-posinset": null,
+        "aria-setsize": null
+      },
+      relatedConcepts: [{
+        concept: {
+          constraints: ["direct descendant of ol, ul or menu"],
+          name: "li"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "item"
+        },
+        module: "XForms"
+      }],
+      requireContextRole: ["directory", "list"],
+      requiredContextRole: ["directory", "list"],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = listitemRole;
+    exports.default = _default2;
+  });
+  unwrapExports(listitemRole_1);
+  var logRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var logRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-live": "polite"
+      },
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = logRole;
+    exports.default = _default2;
+  });
+  unwrapExports(logRole_1);
+  var mainRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var mainRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          name: "main"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = mainRole;
+    exports.default = _default2;
+  });
+  unwrapExports(mainRole_1);
+  var marqueeRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var marqueeRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = marqueeRole;
+    exports.default = _default2;
+  });
+  unwrapExports(marqueeRole_1);
+  var mathRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var mathRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          name: "math"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = mathRole;
+    exports.default = _default2;
+  });
+  unwrapExports(mathRole_1);
+  var menuRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var menuRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-orientation": "vertical"
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "MENU"
+        },
+        module: "JAPI"
+      }, {
+        concept: {
+          name: "list"
+        },
+        module: "ARIA"
+      }, {
+        concept: {
+          name: "select"
+        },
+        module: "XForms"
+      }, {
+        concept: {
+          name: "sidebar"
+        },
+        module: "DTB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [["menuitem", "group"], ["menuitemradio", "group"], ["menuitemcheckbox", "group"], ["menuitem"], ["menuitemcheckbox"], ["menuitemradio"]],
+      requiredProps: {},
+      superClass: [["roletype", "widget", "composite", "select"], ["roletype", "structure", "section", "group", "select"]]
+    };
+    var _default2 = menuRole;
+    exports.default = _default2;
+  });
+  unwrapExports(menuRole_1);
+  var menubarRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var menubarRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-orientation": "horizontal"
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "toolbar"
+        },
+        module: "ARIA"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [["menuitem", "group"], ["menuitemradio", "group"], ["menuitemcheckbox", "group"], ["menuitem"], ["menuitemcheckbox"], ["menuitemradio"]],
+      requiredProps: {},
+      superClass: [["roletype", "widget", "composite", "select", "menu"], ["roletype", "structure", "section", "group", "select", "menu"]]
+    };
+    var _default2 = menubarRole;
+    exports.default = _default2;
+  });
+  unwrapExports(menubarRole_1);
+  var menuitemRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var menuitemRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author", "contents"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-posinset": null,
+        "aria-setsize": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "MENU_ITEM"
+        },
+        module: "JAPI"
+      }, {
+        concept: {
+          name: "listitem"
+        },
+        module: "ARIA"
+      }, {
+        concept: {
+          name: "menuitem"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "option"
+        },
+        module: "ARIA"
+      }],
+      requireContextRole: ["group", "menu", "menubar"],
+      requiredContextRole: ["group", "menu", "menubar"],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "widget", "command"]]
+    };
+    var _default2 = menuitemRole;
+    exports.default = _default2;
+  });
+  unwrapExports(menuitemRole_1);
+  var menuitemcheckboxRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var menuitemcheckboxRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: true,
+      nameFrom: ["author", "contents"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          name: "menuitem"
+        },
+        module: "ARIA"
+      }],
+      requireContextRole: ["group", "menu", "menubar"],
+      requiredContextRole: ["group", "menu", "menubar"],
+      requiredOwnedElements: [],
+      requiredProps: {
+        "aria-checked": null
+      },
+      superClass: [["roletype", "widget", "input", "checkbox"], ["roletype", "widget", "command", "menuitem"]]
+    };
+    var _default2 = menuitemcheckboxRole;
+    exports.default = _default2;
+  });
+  unwrapExports(menuitemcheckboxRole_1);
+  var menuitemradioRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var menuitemradioRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: true,
+      nameFrom: ["author", "contents"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          name: "menuitem"
+        },
+        module: "ARIA"
+      }],
+      requireContextRole: ["group", "menu", "menubar"],
+      requiredContextRole: ["group", "menu", "menubar"],
+      requiredOwnedElements: [],
+      requiredProps: {
+        "aria-checked": null
+      },
+      superClass: [["roletype", "widget", "input", "checkbox", "menuitemcheckbox"], ["roletype", "widget", "command", "menuitem", "menuitemcheckbox"], ["roletype", "widget", "input", "radio"]]
+    };
+    var _default2 = menuitemradioRole;
+    exports.default = _default2;
+  });
+  unwrapExports(menuitemradioRole_1);
+  var meterRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var meterRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: true,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-valuetext": null,
+        "aria-valuemax": "100",
+        "aria-valuemin": "0"
+      },
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {
+        "aria-valuenow": null
+      },
+      superClass: [["roletype", "structure", "range"]]
+    };
+    var _default2 = meterRole;
+    exports.default = _default2;
+  });
+  unwrapExports(meterRole_1);
+  var navigationRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var navigationRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          name: "nav"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = navigationRole;
+    exports.default = _default2;
+  });
+  unwrapExports(navigationRole_1);
+  var noneRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var noneRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: [],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: []
+    };
+    var _default2 = noneRole;
+    exports.default = _default2;
+  });
+  unwrapExports(noneRole_1);
+  var noteRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var noteRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = noteRole;
+    exports.default = _default2;
+  });
+  unwrapExports(noteRole_1);
+  var optionRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var optionRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: true,
+      nameFrom: ["author", "contents"],
+      prohibitedProps: [],
+      props: {
+        "aria-checked": null,
+        "aria-posinset": null,
+        "aria-setsize": null,
+        "aria-selected": "false"
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "item"
+        },
+        module: "XForms"
+      }, {
+        concept: {
+          name: "listitem"
+        },
+        module: "ARIA"
+      }, {
+        concept: {
+          name: "option"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {
+        "aria-selected": "false"
+      },
+      superClass: [["roletype", "widget", "input"]]
+    };
+    var _default2 = optionRole;
+    exports.default = _default2;
+  });
+  unwrapExports(optionRole_1);
+  var paragraphRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var paragraphRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["prohibited"],
+      prohibitedProps: ["aria-label", "aria-labelledby"],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = paragraphRole;
+    exports.default = _default2;
+  });
+  unwrapExports(paragraphRole_1);
+  var presentationRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var presentationRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["prohibited"],
+      prohibitedProps: ["aria-label", "aria-labelledby"],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure"]]
+    };
+    var _default2 = presentationRole;
+    exports.default = _default2;
+  });
+  unwrapExports(presentationRole_1);
+  var progressbarRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var progressbarRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: true,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-valuetext": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "progress"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "status"
+        },
+        module: "ARIA"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "range"], ["roletype", "widget"]]
+    };
+    var _default2 = progressbarRole;
+    exports.default = _default2;
+  });
+  unwrapExports(progressbarRole_1);
+  var radioRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var radioRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: true,
+      nameFrom: ["author", "contents"],
+      prohibitedProps: [],
+      props: {
+        "aria-checked": null,
+        "aria-posinset": null,
+        "aria-setsize": null
+      },
+      relatedConcepts: [{
+        concept: {
+          attributes: [{
+            name: "type",
+            value: "radio"
+          }],
+          name: "input"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {
+        "aria-checked": null
+      },
+      superClass: [["roletype", "widget", "input"]]
+    };
+    var _default2 = radioRole;
+    exports.default = _default2;
+  });
+  unwrapExports(radioRole_1);
+  var radiogroupRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var radiogroupRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-errormessage": null,
+        "aria-invalid": null,
+        "aria-readonly": null,
+        "aria-required": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "list"
+        },
+        module: "ARIA"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [["radio"]],
+      requiredProps: {},
+      superClass: [["roletype", "widget", "composite", "select"], ["roletype", "structure", "section", "group", "select"]]
+    };
+    var _default2 = radiogroupRole;
+    exports.default = _default2;
+  });
+  unwrapExports(radiogroupRole_1);
+  var regionRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var regionRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          attributes: [{
+            constraints: ["set"],
+            name: "aria-label"
+          }],
+          name: "section"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            constraints: ["set"],
+            name: "aria-labelledby"
+          }],
+          name: "section"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "Device Independence Glossart perceivable unit"
+        }
+      }, {
+        concept: {
+          name: "frame"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = regionRole;
+    exports.default = _default2;
+  });
+  unwrapExports(regionRole_1);
+  var rowRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var rowRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author", "contents"],
+      prohibitedProps: [],
+      props: {
+        "aria-colindex": null,
+        "aria-expanded": null,
+        "aria-level": null,
+        "aria-posinset": null,
+        "aria-rowindex": null,
+        "aria-selected": null,
+        "aria-setsize": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "tr"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: ["grid", "rowgroup", "table", "treegrid"],
+      requiredContextRole: ["grid", "rowgroup", "table", "treegrid"],
+      requiredOwnedElements: [["cell"], ["columnheader"], ["gridcell"], ["rowheader"]],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "group"], ["roletype", "widget"]]
+    };
+    var _default2 = rowRole;
+    exports.default = _default2;
+  });
+  unwrapExports(rowRole_1);
+  var rowgroupRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var rowgroupRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author", "contents"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          name: "tbody"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "tfoot"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "thead"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: ["grid", "table", "treegrid"],
+      requiredContextRole: ["grid", "table", "treegrid"],
+      requiredOwnedElements: [["row"]],
+      requiredProps: {},
+      superClass: [["roletype", "structure"]]
+    };
+    var _default2 = rowgroupRole;
+    exports.default = _default2;
+  });
+  unwrapExports(rowgroupRole_1);
+  var rowheaderRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var rowheaderRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author", "contents"],
+      prohibitedProps: [],
+      props: {
+        "aria-sort": null
+      },
+      relatedConcepts: [{
+        concept: {
+          attributes: [{
+            name: "scope",
+            value: "row"
+          }],
+          name: "th"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: ["row"],
+      requiredContextRole: ["row"],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "cell"], ["roletype", "structure", "section", "cell", "gridcell"], ["roletype", "widget", "gridcell"], ["roletype", "structure", "sectionhead"]]
+    };
+    var _default2 = rowheaderRole;
+    exports.default = _default2;
+  });
+  unwrapExports(rowheaderRole_1);
+  var scrollbarRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var scrollbarRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: true,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-valuetext": null,
+        "aria-orientation": "vertical",
+        "aria-valuemax": "100",
+        "aria-valuemin": "0"
+      },
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {
+        "aria-controls": null,
+        "aria-valuenow": null
+      },
+      superClass: [["roletype", "structure", "range"], ["roletype", "widget"]]
+    };
+    var _default2 = scrollbarRole;
+    exports.default = _default2;
+  });
+  unwrapExports(scrollbarRole_1);
+  var searchRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var searchRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = searchRole;
+    exports.default = _default2;
+  });
+  unwrapExports(searchRole_1);
+  var searchboxRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var searchboxRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          attributes: [{
+            constraints: ["undefined"],
+            name: "list"
+          }, {
+            name: "type",
+            value: "search"
+          }],
+          name: "input"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "widget", "input", "textbox"]]
+    };
+    var _default2 = searchboxRole;
+    exports.default = _default2;
+  });
+  unwrapExports(searchboxRole_1);
+  var separatorRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var separatorRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: true,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-orientation": "horizontal",
+        "aria-valuemax": "100",
+        "aria-valuemin": "0",
+        "aria-valuenow": null,
+        "aria-valuetext": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "hr"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure"]]
+    };
+    var _default2 = separatorRole;
+    exports.default = _default2;
+  });
+  unwrapExports(separatorRole_1);
+  var sliderRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var sliderRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: true,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-errormessage": null,
+        "aria-haspopup": null,
+        "aria-invalid": null,
+        "aria-readonly": null,
+        "aria-valuetext": null,
+        "aria-orientation": "horizontal",
+        "aria-valuemax": "100",
+        "aria-valuemin": "0"
+      },
+      relatedConcepts: [{
+        concept: {
+          attributes: [{
+            name: "type",
+            value: "range"
+          }],
+          name: "input"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {
+        "aria-valuenow": null
+      },
+      superClass: [["roletype", "widget", "input"], ["roletype", "structure", "range"]]
+    };
+    var _default2 = sliderRole;
+    exports.default = _default2;
+  });
+  unwrapExports(sliderRole_1);
+  var spinbuttonRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var spinbuttonRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-errormessage": null,
+        "aria-invalid": null,
+        "aria-readonly": null,
+        "aria-required": null,
+        "aria-valuetext": null,
+        "aria-valuenow": "0"
+      },
+      relatedConcepts: [{
+        concept: {
+          attributes: [{
+            name: "type",
+            value: "number"
+          }],
+          name: "input"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "widget", "composite"], ["roletype", "widget", "input"], ["roletype", "structure", "range"]]
+    };
+    var _default2 = spinbuttonRole;
+    exports.default = _default2;
+  });
+  unwrapExports(spinbuttonRole_1);
+  var statusRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var statusRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-atomic": "true",
+        "aria-live": "polite"
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "output"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = statusRole;
+    exports.default = _default2;
+  });
+  unwrapExports(statusRole_1);
+  var strongRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var strongRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["prohibited"],
+      prohibitedProps: ["aria-label", "aria-labelledby"],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = strongRole;
+    exports.default = _default2;
+  });
+  unwrapExports(strongRole_1);
+  var subscriptRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var subscriptRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["prohibited"],
+      prohibitedProps: ["aria-label", "aria-labelledby"],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = subscriptRole;
+    exports.default = _default2;
+  });
+  unwrapExports(subscriptRole_1);
+  var superscriptRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var superscriptRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["prohibited"],
+      prohibitedProps: ["aria-label", "aria-labelledby"],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = superscriptRole;
+    exports.default = _default2;
+  });
+  unwrapExports(superscriptRole_1);
+  var switchRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var switchRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: true,
+      nameFrom: ["author", "contents"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          name: "button"
+        },
+        module: "ARIA"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {
+        "aria-checked": null
+      },
+      superClass: [["roletype", "widget", "input", "checkbox"]]
+    };
+    var _default2 = switchRole;
+    exports.default = _default2;
+  });
+  unwrapExports(switchRole_1);
+  var tabRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var tabRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: true,
+      nameFrom: ["author", "contents"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-posinset": null,
+        "aria-setsize": null,
+        "aria-selected": "false"
+      },
+      relatedConcepts: [],
+      requireContextRole: ["tablist"],
+      requiredContextRole: ["tablist"],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "sectionhead"], ["roletype", "widget"]]
+    };
+    var _default2 = tabRole;
+    exports.default = _default2;
+  });
+  unwrapExports(tabRole_1);
+  var tableRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var tableRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-colcount": null,
+        "aria-rowcount": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "table"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [["row"], ["row", "rowgroup"]],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = tableRole;
+    exports.default = _default2;
+  });
+  unwrapExports(tableRole_1);
+  var tablistRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var tablistRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-level": null,
+        "aria-multiselectable": null,
+        "aria-orientation": "horizontal"
+      },
+      relatedConcepts: [{
+        module: "DAISY",
+        concept: {
+          name: "guide"
+        }
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [["tab"]],
+      requiredProps: {},
+      superClass: [["roletype", "widget", "composite"]]
+    };
+    var _default2 = tablistRole;
+    exports.default = _default2;
+  });
+  unwrapExports(tablistRole_1);
+  var tabpanelRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var tabpanelRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = tabpanelRole;
+    exports.default = _default2;
+  });
+  unwrapExports(tabpanelRole_1);
+  var termRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var termRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          name: "dfn"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "dt"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = termRole;
+    exports.default = _default2;
+  });
+  unwrapExports(termRole_1);
+  var textboxRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var textboxRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-activedescendant": null,
+        "aria-autocomplete": null,
+        "aria-errormessage": null,
+        "aria-haspopup": null,
+        "aria-invalid": null,
+        "aria-multiline": null,
+        "aria-placeholder": null,
+        "aria-readonly": null,
+        "aria-required": null
+      },
+      relatedConcepts: [{
+        concept: {
+          attributes: [{
+            constraints: ["undefined"],
+            name: "type"
+          }, {
+            constraints: ["undefined"],
+            name: "list"
+          }],
+          name: "input"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            constraints: ["undefined"],
+            name: "list"
+          }, {
+            name: "type",
+            value: "email"
+          }],
+          name: "input"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            constraints: ["undefined"],
+            name: "list"
+          }, {
+            name: "type",
+            value: "tel"
+          }],
+          name: "input"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            constraints: ["undefined"],
+            name: "list"
+          }, {
+            name: "type",
+            value: "text"
+          }],
+          name: "input"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          attributes: [{
+            constraints: ["undefined"],
+            name: "list"
+          }, {
+            name: "type",
+            value: "url"
+          }],
+          name: "input"
+        },
+        module: "HTML"
+      }, {
+        concept: {
+          name: "input"
+        },
+        module: "XForms"
+      }, {
+        concept: {
+          name: "textarea"
+        },
+        module: "HTML"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "widget", "input"]]
+    };
+    var _default2 = textboxRole;
+    exports.default = _default2;
+  });
+  unwrapExports(textboxRole_1);
+  var timeRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var timeRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = timeRole;
+    exports.default = _default2;
+  });
+  unwrapExports(timeRole_1);
+  var timerRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var timerRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "status"]]
+    };
+    var _default2 = timerRole;
+    exports.default = _default2;
+  });
+  unwrapExports(timerRole_1);
+  var toolbarRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var toolbarRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-orientation": "horizontal"
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "menubar"
+        },
+        module: "ARIA"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "group"]]
+    };
+    var _default2 = toolbarRole;
+    exports.default = _default2;
+  });
+  unwrapExports(toolbarRole_1);
+  var tooltipRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var tooltipRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author", "contents"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = tooltipRole;
+    exports.default = _default2;
+  });
+  unwrapExports(tooltipRole_1);
+  var treeRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var treeRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-errormessage": null,
+        "aria-invalid": null,
+        "aria-multiselectable": null,
+        "aria-required": null,
+        "aria-orientation": "vertical"
+      },
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [["treeitem", "group"], ["treeitem"]],
+      requiredProps: {},
+      superClass: [["roletype", "widget", "composite", "select"], ["roletype", "structure", "section", "group", "select"]]
+    };
+    var _default2 = treeRole;
+    exports.default = _default2;
+  });
+  unwrapExports(treeRole_1);
+  var treegridRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var treegridRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [["row"], ["row", "rowgroup"]],
+      requiredProps: {},
+      superClass: [["roletype", "widget", "composite", "grid"], ["roletype", "structure", "section", "table", "grid"], ["roletype", "widget", "composite", "select", "tree"], ["roletype", "structure", "section", "group", "select", "tree"]]
+    };
+    var _default2 = treegridRole;
+    exports.default = _default2;
+  });
+  unwrapExports(treegridRole_1);
+  var treeitemRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var treeitemRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author", "contents"],
+      prohibitedProps: [],
+      props: {
+        "aria-expanded": null,
+        "aria-haspopup": null
+      },
+      relatedConcepts: [],
+      requireContextRole: ["group", "tree"],
+      requiredContextRole: ["group", "tree"],
+      requiredOwnedElements: [],
+      requiredProps: {
+        "aria-selected": null
+      },
+      superClass: [["roletype", "structure", "section", "listitem"], ["roletype", "widget", "input", "option"]]
+    };
+    var _default2 = treeitemRole;
+    exports.default = _default2;
+  });
+  unwrapExports(treeitemRole_1);
+  var ariaLiteralRoles_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var _alertRole = _interopRequireDefault(alertRole_1);
+    var _alertdialogRole = _interopRequireDefault(alertdialogRole_1);
+    var _applicationRole = _interopRequireDefault(applicationRole_1);
+    var _articleRole = _interopRequireDefault(articleRole_1);
+    var _bannerRole = _interopRequireDefault(bannerRole_1);
+    var _blockquoteRole = _interopRequireDefault(blockquoteRole_1);
+    var _buttonRole = _interopRequireDefault(buttonRole_1);
+    var _captionRole = _interopRequireDefault(captionRole_1);
+    var _cellRole = _interopRequireDefault(cellRole_1);
+    var _checkboxRole = _interopRequireDefault(checkboxRole_1);
+    var _codeRole = _interopRequireDefault(codeRole_1);
+    var _columnheaderRole = _interopRequireDefault(columnheaderRole_1);
+    var _comboboxRole = _interopRequireDefault(comboboxRole_1);
+    var _complementaryRole = _interopRequireDefault(complementaryRole_1);
+    var _contentinfoRole = _interopRequireDefault(contentinfoRole_1);
+    var _definitionRole = _interopRequireDefault(definitionRole_1);
+    var _deletionRole = _interopRequireDefault(deletionRole_1);
+    var _dialogRole = _interopRequireDefault(dialogRole_1);
+    var _directoryRole = _interopRequireDefault(directoryRole_1);
+    var _documentRole = _interopRequireDefault(documentRole_1);
+    var _emphasisRole = _interopRequireDefault(emphasisRole_1);
+    var _feedRole = _interopRequireDefault(feedRole_1);
+    var _figureRole = _interopRequireDefault(figureRole_1);
+    var _formRole = _interopRequireDefault(formRole_1);
+    var _genericRole = _interopRequireDefault(genericRole_1);
+    var _gridRole = _interopRequireDefault(gridRole_1);
+    var _gridcellRole = _interopRequireDefault(gridcellRole_1);
+    var _groupRole = _interopRequireDefault(groupRole_1);
+    var _headingRole = _interopRequireDefault(headingRole_1);
+    var _imgRole = _interopRequireDefault(imgRole_1);
+    var _insertionRole = _interopRequireDefault(insertionRole_1);
+    var _linkRole = _interopRequireDefault(linkRole_1);
+    var _listRole = _interopRequireDefault(listRole_1);
+    var _listboxRole = _interopRequireDefault(listboxRole_1);
+    var _listitemRole = _interopRequireDefault(listitemRole_1);
+    var _logRole = _interopRequireDefault(logRole_1);
+    var _mainRole = _interopRequireDefault(mainRole_1);
+    var _marqueeRole = _interopRequireDefault(marqueeRole_1);
+    var _mathRole = _interopRequireDefault(mathRole_1);
+    var _menuRole = _interopRequireDefault(menuRole_1);
+    var _menubarRole = _interopRequireDefault(menubarRole_1);
+    var _menuitemRole = _interopRequireDefault(menuitemRole_1);
+    var _menuitemcheckboxRole = _interopRequireDefault(menuitemcheckboxRole_1);
+    var _menuitemradioRole = _interopRequireDefault(menuitemradioRole_1);
+    var _meterRole = _interopRequireDefault(meterRole_1);
+    var _navigationRole = _interopRequireDefault(navigationRole_1);
+    var _noneRole = _interopRequireDefault(noneRole_1);
+    var _noteRole = _interopRequireDefault(noteRole_1);
+    var _optionRole = _interopRequireDefault(optionRole_1);
+    var _paragraphRole = _interopRequireDefault(paragraphRole_1);
+    var _presentationRole = _interopRequireDefault(presentationRole_1);
+    var _progressbarRole = _interopRequireDefault(progressbarRole_1);
+    var _radioRole = _interopRequireDefault(radioRole_1);
+    var _radiogroupRole = _interopRequireDefault(radiogroupRole_1);
+    var _regionRole = _interopRequireDefault(regionRole_1);
+    var _rowRole = _interopRequireDefault(rowRole_1);
+    var _rowgroupRole = _interopRequireDefault(rowgroupRole_1);
+    var _rowheaderRole = _interopRequireDefault(rowheaderRole_1);
+    var _scrollbarRole = _interopRequireDefault(scrollbarRole_1);
+    var _searchRole = _interopRequireDefault(searchRole_1);
+    var _searchboxRole = _interopRequireDefault(searchboxRole_1);
+    var _separatorRole = _interopRequireDefault(separatorRole_1);
+    var _sliderRole = _interopRequireDefault(sliderRole_1);
+    var _spinbuttonRole = _interopRequireDefault(spinbuttonRole_1);
+    var _statusRole = _interopRequireDefault(statusRole_1);
+    var _strongRole = _interopRequireDefault(strongRole_1);
+    var _subscriptRole = _interopRequireDefault(subscriptRole_1);
+    var _superscriptRole = _interopRequireDefault(superscriptRole_1);
+    var _switchRole = _interopRequireDefault(switchRole_1);
+    var _tabRole = _interopRequireDefault(tabRole_1);
+    var _tableRole = _interopRequireDefault(tableRole_1);
+    var _tablistRole = _interopRequireDefault(tablistRole_1);
+    var _tabpanelRole = _interopRequireDefault(tabpanelRole_1);
+    var _termRole = _interopRequireDefault(termRole_1);
+    var _textboxRole = _interopRequireDefault(textboxRole_1);
+    var _timeRole = _interopRequireDefault(timeRole_1);
+    var _timerRole = _interopRequireDefault(timerRole_1);
+    var _toolbarRole = _interopRequireDefault(toolbarRole_1);
+    var _tooltipRole = _interopRequireDefault(tooltipRole_1);
+    var _treeRole = _interopRequireDefault(treeRole_1);
+    var _treegridRole = _interopRequireDefault(treegridRole_1);
+    var _treeitemRole = _interopRequireDefault(treeitemRole_1);
+    function _interopRequireDefault(obj) {
+      return obj && obj.__esModule ? obj : { default: obj };
+    }
+    var ariaLiteralRoles = [["alert", _alertRole.default], ["alertdialog", _alertdialogRole.default], ["application", _applicationRole.default], ["article", _articleRole.default], ["banner", _bannerRole.default], ["blockquote", _blockquoteRole.default], ["button", _buttonRole.default], ["caption", _captionRole.default], ["cell", _cellRole.default], ["checkbox", _checkboxRole.default], ["code", _codeRole.default], ["columnheader", _columnheaderRole.default], ["combobox", _comboboxRole.default], ["complementary", _complementaryRole.default], ["contentinfo", _contentinfoRole.default], ["definition", _definitionRole.default], ["deletion", _deletionRole.default], ["dialog", _dialogRole.default], ["directory", _directoryRole.default], ["document", _documentRole.default], ["emphasis", _emphasisRole.default], ["feed", _feedRole.default], ["figure", _figureRole.default], ["form", _formRole.default], ["generic", _genericRole.default], ["grid", _gridRole.default], ["gridcell", _gridcellRole.default], ["group", _groupRole.default], ["heading", _headingRole.default], ["img", _imgRole.default], ["insertion", _insertionRole.default], ["link", _linkRole.default], ["list", _listRole.default], ["listbox", _listboxRole.default], ["listitem", _listitemRole.default], ["log", _logRole.default], ["main", _mainRole.default], ["marquee", _marqueeRole.default], ["math", _mathRole.default], ["menu", _menuRole.default], ["menubar", _menubarRole.default], ["menuitem", _menuitemRole.default], ["menuitemcheckbox", _menuitemcheckboxRole.default], ["menuitemradio", _menuitemradioRole.default], ["meter", _meterRole.default], ["navigation", _navigationRole.default], ["none", _noneRole.default], ["note", _noteRole.default], ["option", _optionRole.default], ["paragraph", _paragraphRole.default], ["presentation", _presentationRole.default], ["progressbar", _progressbarRole.default], ["radio", _radioRole.default], ["radiogroup", _radiogroupRole.default], ["region", _regionRole.default], ["row", _rowRole.default], ["rowgroup", _rowgroupRole.default], ["rowheader", _rowheaderRole.default], ["scrollbar", _scrollbarRole.default], ["search", _searchRole.default], ["searchbox", _searchboxRole.default], ["separator", _separatorRole.default], ["slider", _sliderRole.default], ["spinbutton", _spinbuttonRole.default], ["status", _statusRole.default], ["strong", _strongRole.default], ["subscript", _subscriptRole.default], ["superscript", _superscriptRole.default], ["switch", _switchRole.default], ["tab", _tabRole.default], ["table", _tableRole.default], ["tablist", _tablistRole.default], ["tabpanel", _tabpanelRole.default], ["term", _termRole.default], ["textbox", _textboxRole.default], ["time", _timeRole.default], ["timer", _timerRole.default], ["toolbar", _toolbarRole.default], ["tooltip", _tooltipRole.default], ["tree", _treeRole.default], ["treegrid", _treegridRole.default], ["treeitem", _treeitemRole.default]];
+    var _default2 = ariaLiteralRoles;
+    exports.default = _default2;
+  });
+  unwrapExports(ariaLiteralRoles_1);
+  var docAbstractRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docAbstractRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "abstract [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = docAbstractRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docAbstractRole_1);
+  var docAcknowledgmentsRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docAcknowledgmentsRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "acknowledgments [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = docAcknowledgmentsRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docAcknowledgmentsRole_1);
+  var docAfterwordRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docAfterwordRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "afterword [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = docAfterwordRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docAfterwordRole_1);
+  var docAppendixRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docAppendixRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "appendix [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = docAppendixRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docAppendixRole_1);
+  var docBacklinkRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docBacklinkRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author", "content"],
+      prohibitedProps: [],
+      props: {
+        "aria-errormessage": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "referrer [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "widget", "command", "link"]]
+    };
+    var _default2 = docBacklinkRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docBacklinkRole_1);
+  var docBiblioentryRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docBiblioentryRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "EPUB biblioentry [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: ["doc-bibliography"],
+      requiredContextRole: ["doc-bibliography"],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "listitem"]]
+    };
+    var _default2 = docBiblioentryRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docBiblioentryRole_1);
+  var docBibliographyRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docBibliographyRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "bibliography [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [["doc-biblioentry"]],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = docBibliographyRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docBibliographyRole_1);
+  var docBibliorefRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docBibliorefRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author", "contents"],
+      prohibitedProps: [],
+      props: {
+        "aria-errormessage": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "biblioref [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "widget", "command", "link"]]
+    };
+    var _default2 = docBibliorefRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docBibliorefRole_1);
+  var docChapterRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docChapterRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "chapter [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = docChapterRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docChapterRole_1);
+  var docColophonRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docColophonRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "colophon [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = docColophonRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docColophonRole_1);
+  var docConclusionRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docConclusionRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "conclusion [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = docConclusionRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docConclusionRole_1);
+  var docCoverRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docCoverRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "cover [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "img"]]
+    };
+    var _default2 = docCoverRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docCoverRole_1);
+  var docCreditRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docCreditRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "credit [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = docCreditRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docCreditRole_1);
+  var docCreditsRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docCreditsRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "credits [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = docCreditsRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docCreditsRole_1);
+  var docDedicationRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docDedicationRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "dedication [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = docDedicationRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docDedicationRole_1);
+  var docEndnoteRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docEndnoteRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "rearnote [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: ["doc-endnotes"],
+      requiredContextRole: ["doc-endnotes"],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "listitem"]]
+    };
+    var _default2 = docEndnoteRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docEndnoteRole_1);
+  var docEndnotesRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docEndnotesRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "rearnotes [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [["doc-endnote"]],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = docEndnotesRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docEndnotesRole_1);
+  var docEpigraphRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docEpigraphRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "epigraph [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = docEpigraphRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docEpigraphRole_1);
+  var docEpilogueRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docEpilogueRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "epilogue [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = docEpilogueRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docEpilogueRole_1);
+  var docErrataRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docErrataRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "errata [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = docErrataRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docErrataRole_1);
+  var docExampleRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docExampleRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = docExampleRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docExampleRole_1);
+  var docFootnoteRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docFootnoteRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "footnote [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = docFootnoteRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docFootnoteRole_1);
+  var docForewordRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docForewordRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "foreword [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = docForewordRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docForewordRole_1);
+  var docGlossaryRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docGlossaryRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "glossary [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [["definition"], ["term"]],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = docGlossaryRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docGlossaryRole_1);
+  var docGlossrefRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docGlossrefRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author", "contents"],
+      prohibitedProps: [],
+      props: {
+        "aria-errormessage": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "glossref [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "widget", "command", "link"]]
+    };
+    var _default2 = docGlossrefRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docGlossrefRole_1);
+  var docIndexRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docIndexRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "index [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark", "navigation"]]
+    };
+    var _default2 = docIndexRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docIndexRole_1);
+  var docIntroductionRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docIntroductionRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "introduction [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = docIntroductionRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docIntroductionRole_1);
+  var docNoterefRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docNoterefRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author", "contents"],
+      prohibitedProps: [],
+      props: {
+        "aria-errormessage": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "noteref [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "widget", "command", "link"]]
+    };
+    var _default2 = docNoterefRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docNoterefRole_1);
+  var docNoticeRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docNoticeRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "notice [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "note"]]
+    };
+    var _default2 = docNoticeRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docNoticeRole_1);
+  var docPagebreakRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docPagebreakRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: true,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "pagebreak [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "separator"]]
+    };
+    var _default2 = docPagebreakRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docPagebreakRole_1);
+  var docPagelistRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docPagelistRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "page-list [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark", "navigation"]]
+    };
+    var _default2 = docPagelistRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docPagelistRole_1);
+  var docPartRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docPartRole = {
+      abstract: false,
+      accessibleNameRequired: true,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "part [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = docPartRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docPartRole_1);
+  var docPrefaceRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docPrefaceRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "preface [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = docPrefaceRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docPrefaceRole_1);
+  var docPrologueRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docPrologueRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "prologue [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark"]]
+    };
+    var _default2 = docPrologueRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docPrologueRole_1);
+  var docPullquoteRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docPullquoteRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {},
+      relatedConcepts: [{
+        concept: {
+          name: "pullquote [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["none"]]
+    };
+    var _default2 = docPullquoteRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docPullquoteRole_1);
+  var docQnaRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docQnaRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "qna [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section"]]
+    };
+    var _default2 = docQnaRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docQnaRole_1);
+  var docSubtitleRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docSubtitleRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "subtitle [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "sectionhead"]]
+    };
+    var _default2 = docSubtitleRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docSubtitleRole_1);
+  var docTipRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docTipRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "help [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "note"]]
+    };
+    var _default2 = docTipRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docTipRole_1);
+  var docTocRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var docTocRole = {
+      abstract: false,
+      accessibleNameRequired: false,
+      baseConcepts: [],
+      childrenPresentational: false,
+      nameFrom: ["author"],
+      prohibitedProps: [],
+      props: {
+        "aria-disabled": null,
+        "aria-errormessage": null,
+        "aria-expanded": null,
+        "aria-haspopup": null,
+        "aria-invalid": null
+      },
+      relatedConcepts: [{
+        concept: {
+          name: "toc [EPUB-SSV]"
+        },
+        module: "EPUB"
+      }],
+      requireContextRole: [],
+      requiredContextRole: [],
+      requiredOwnedElements: [],
+      requiredProps: {},
+      superClass: [["roletype", "structure", "section", "landmark", "navigation"]]
+    };
+    var _default2 = docTocRole;
+    exports.default = _default2;
+  });
+  unwrapExports(docTocRole_1);
+  var ariaDpubRoles_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var _docAbstractRole = _interopRequireDefault(docAbstractRole_1);
+    var _docAcknowledgmentsRole = _interopRequireDefault(docAcknowledgmentsRole_1);
+    var _docAfterwordRole = _interopRequireDefault(docAfterwordRole_1);
+    var _docAppendixRole = _interopRequireDefault(docAppendixRole_1);
+    var _docBacklinkRole = _interopRequireDefault(docBacklinkRole_1);
+    var _docBiblioentryRole = _interopRequireDefault(docBiblioentryRole_1);
+    var _docBibliographyRole = _interopRequireDefault(docBibliographyRole_1);
+    var _docBibliorefRole = _interopRequireDefault(docBibliorefRole_1);
+    var _docChapterRole = _interopRequireDefault(docChapterRole_1);
+    var _docColophonRole = _interopRequireDefault(docColophonRole_1);
+    var _docConclusionRole = _interopRequireDefault(docConclusionRole_1);
+    var _docCoverRole = _interopRequireDefault(docCoverRole_1);
+    var _docCreditRole = _interopRequireDefault(docCreditRole_1);
+    var _docCreditsRole = _interopRequireDefault(docCreditsRole_1);
+    var _docDedicationRole = _interopRequireDefault(docDedicationRole_1);
+    var _docEndnoteRole = _interopRequireDefault(docEndnoteRole_1);
+    var _docEndnotesRole = _interopRequireDefault(docEndnotesRole_1);
+    var _docEpigraphRole = _interopRequireDefault(docEpigraphRole_1);
+    var _docEpilogueRole = _interopRequireDefault(docEpilogueRole_1);
+    var _docErrataRole = _interopRequireDefault(docErrataRole_1);
+    var _docExampleRole = _interopRequireDefault(docExampleRole_1);
+    var _docFootnoteRole = _interopRequireDefault(docFootnoteRole_1);
+    var _docForewordRole = _interopRequireDefault(docForewordRole_1);
+    var _docGlossaryRole = _interopRequireDefault(docGlossaryRole_1);
+    var _docGlossrefRole = _interopRequireDefault(docGlossrefRole_1);
+    var _docIndexRole = _interopRequireDefault(docIndexRole_1);
+    var _docIntroductionRole = _interopRequireDefault(docIntroductionRole_1);
+    var _docNoterefRole = _interopRequireDefault(docNoterefRole_1);
+    var _docNoticeRole = _interopRequireDefault(docNoticeRole_1);
+    var _docPagebreakRole = _interopRequireDefault(docPagebreakRole_1);
+    var _docPagelistRole = _interopRequireDefault(docPagelistRole_1);
+    var _docPartRole = _interopRequireDefault(docPartRole_1);
+    var _docPrefaceRole = _interopRequireDefault(docPrefaceRole_1);
+    var _docPrologueRole = _interopRequireDefault(docPrologueRole_1);
+    var _docPullquoteRole = _interopRequireDefault(docPullquoteRole_1);
+    var _docQnaRole = _interopRequireDefault(docQnaRole_1);
+    var _docSubtitleRole = _interopRequireDefault(docSubtitleRole_1);
+    var _docTipRole = _interopRequireDefault(docTipRole_1);
+    var _docTocRole = _interopRequireDefault(docTocRole_1);
+    function _interopRequireDefault(obj) {
+      return obj && obj.__esModule ? obj : { default: obj };
+    }
+    var ariaDpubRoles = [["doc-abstract", _docAbstractRole.default], ["doc-acknowledgments", _docAcknowledgmentsRole.default], ["doc-afterword", _docAfterwordRole.default], ["doc-appendix", _docAppendixRole.default], ["doc-backlink", _docBacklinkRole.default], ["doc-biblioentry", _docBiblioentryRole.default], ["doc-bibliography", _docBibliographyRole.default], ["doc-biblioref", _docBibliorefRole.default], ["doc-chapter", _docChapterRole.default], ["doc-colophon", _docColophonRole.default], ["doc-conclusion", _docConclusionRole.default], ["doc-cover", _docCoverRole.default], ["doc-credit", _docCreditRole.default], ["doc-credits", _docCreditsRole.default], ["doc-dedication", _docDedicationRole.default], ["doc-endnote", _docEndnoteRole.default], ["doc-endnotes", _docEndnotesRole.default], ["doc-epigraph", _docEpigraphRole.default], ["doc-epilogue", _docEpilogueRole.default], ["doc-errata", _docErrataRole.default], ["doc-example", _docExampleRole.default], ["doc-footnote", _docFootnoteRole.default], ["doc-foreword", _docForewordRole.default], ["doc-glossary", _docGlossaryRole.default], ["doc-glossref", _docGlossrefRole.default], ["doc-index", _docIndexRole.default], ["doc-introduction", _docIntroductionRole.default], ["doc-noteref", _docNoterefRole.default], ["doc-notice", _docNoticeRole.default], ["doc-pagebreak", _docPagebreakRole.default], ["doc-pagelist", _docPagelistRole.default], ["doc-part", _docPartRole.default], ["doc-preface", _docPrefaceRole.default], ["doc-prologue", _docPrologueRole.default], ["doc-pullquote", _docPullquoteRole.default], ["doc-qna", _docQnaRole.default], ["doc-subtitle", _docSubtitleRole.default], ["doc-tip", _docTipRole.default], ["doc-toc", _docTocRole.default]];
+    var _default2 = ariaDpubRoles;
+    exports.default = _default2;
+  });
+  unwrapExports(ariaDpubRoles_1);
+  var rolesMap_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var _ariaAbstractRoles = _interopRequireDefault(ariaAbstractRoles_1);
+    var _ariaLiteralRoles = _interopRequireDefault(ariaLiteralRoles_1);
+    var _ariaDpubRoles = _interopRequireDefault(ariaDpubRoles_1);
+    function _interopRequireDefault(obj) {
+      return obj && obj.__esModule ? obj : { default: obj };
+    }
+    function _defineProperty(obj, key, value2) {
+      if (key in obj) {
+        Object.defineProperty(obj, key, { value: value2, enumerable: true, configurable: true, writable: true });
+      } else {
+        obj[key] = value2;
+      }
+      return obj;
+    }
+    function _createForOfIteratorHelper(o, allowArrayLike) {
+      var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"];
+      if (!it) {
+        if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") {
+          if (it)
+            o = it;
+          var i = 0;
+          var F2 = function F3() {
+          };
+          return { s: F2, n: function n2() {
+            if (i >= o.length)
+              return { done: true };
+            return { done: false, value: o[i++] };
+          }, e: function e(_e2) {
+            throw _e2;
+          }, f: F2 };
+        }
+        throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+      }
+      var normalCompletion = true, didErr = false, err;
+      return { s: function s() {
+        it = it.call(o);
+      }, n: function n2() {
+        var step = it.next();
+        normalCompletion = step.done;
+        return step;
+      }, e: function e(_e3) {
+        didErr = true;
+        err = _e3;
+      }, f: function f() {
+        try {
+          if (!normalCompletion && it.return != null)
+            it.return();
+        } finally {
+          if (didErr)
+            throw err;
+        }
+      } };
+    }
+    function _slicedToArray(arr, i) {
+      return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _unsupportedIterableToArray(arr, i) || _nonIterableRest();
+    }
+    function _nonIterableRest() {
+      throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+    }
+    function _unsupportedIterableToArray(o, minLen) {
+      if (!o)
+        return;
+      if (typeof o === "string")
+        return _arrayLikeToArray(o, minLen);
+      var n2 = Object.prototype.toString.call(o).slice(8, -1);
+      if (n2 === "Object" && o.constructor)
+        n2 = o.constructor.name;
+      if (n2 === "Map" || n2 === "Set")
+        return Array.from(o);
+      if (n2 === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n2))
+        return _arrayLikeToArray(o, minLen);
+    }
+    function _arrayLikeToArray(arr, len) {
+      if (len == null || len > arr.length)
+        len = arr.length;
+      for (var i = 0, arr2 = new Array(len); i < len; i++) {
+        arr2[i] = arr[i];
+      }
+      return arr2;
+    }
+    function _iterableToArrayLimit(arr, i) {
+      var _i = arr == null ? null : typeof Symbol !== "undefined" && arr[Symbol.iterator] || arr["@@iterator"];
+      if (_i == null)
+        return;
+      var _arr = [];
+      var _n = true;
+      var _d = false;
+      var _s, _e;
+      try {
+        for (_i = _i.call(arr); !(_n = (_s = _i.next()).done); _n = true) {
+          _arr.push(_s.value);
+          if (i && _arr.length === i)
+            break;
+        }
+      } catch (err) {
+        _d = true;
+        _e = err;
+      } finally {
+        try {
+          if (!_n && _i["return"] != null)
+            _i["return"]();
+        } finally {
+          if (_d)
+            throw _e;
+        }
+      }
+      return _arr;
+    }
+    function _arrayWithHoles(arr) {
+      if (Array.isArray(arr))
+        return arr;
+    }
+    var roles2 = [].concat(_ariaAbstractRoles.default, _ariaLiteralRoles.default, _ariaDpubRoles.default);
+    roles2.forEach(function(_ref) {
+      var _ref2 = _slicedToArray(_ref, 2), roleDefinition = _ref2[1];
+      var _iterator = _createForOfIteratorHelper(roleDefinition.superClass), _step;
+      try {
+        for (_iterator.s(); !(_step = _iterator.n()).done; ) {
+          var superClassIter = _step.value;
+          var _iterator2 = _createForOfIteratorHelper(superClassIter), _step2;
+          try {
+            var _loop = function _loop2() {
+              var superClassName = _step2.value;
+              var superClassRoleTuple = roles2.find(function(_ref3) {
+                var _ref4 = _slicedToArray(_ref3, 1), name = _ref4[0];
+                return name === superClassName;
+              });
+              if (superClassRoleTuple) {
+                var superClassDefinition = superClassRoleTuple[1];
+                for (var _i2 = 0, _Object$keys = Object.keys(superClassDefinition.props); _i2 < _Object$keys.length; _i2++) {
+                  var prop = _Object$keys[_i2];
+                  if (!Object.prototype.hasOwnProperty.call(roleDefinition.props, prop)) {
+                    Object.assign(roleDefinition.props, _defineProperty({}, prop, superClassDefinition.props[prop]));
+                  }
+                }
+              }
+            };
+            for (_iterator2.s(); !(_step2 = _iterator2.n()).done; ) {
+              _loop();
+            }
+          } catch (err) {
+            _iterator2.e(err);
+          } finally {
+            _iterator2.f();
+          }
+        }
+      } catch (err) {
+        _iterator.e(err);
+      } finally {
+        _iterator.f();
+      }
+    });
+    var rolesMap = {
+      entries: function entries() {
+        return roles2;
+      },
+      get: function get(key) {
+        var item = roles2.find(function(tuple) {
+          return tuple[0] === key ? true : false;
+        });
+        return item && item[1];
+      },
+      has: function has2(key) {
+        return !!this.get(key);
+      },
+      keys: function keys() {
+        return roles2.map(function(_ref5) {
+          var _ref6 = _slicedToArray(_ref5, 1), key = _ref6[0];
+          return key;
+        });
+      },
+      values: function values() {
+        return roles2.map(function(_ref7) {
+          var _ref8 = _slicedToArray(_ref7, 2), values2 = _ref8[1];
+          return values2;
+        });
+      }
+    };
+    var _default2 = rolesMap;
+    exports.default = _default2;
+  });
+  unwrapExports(rolesMap_1);
+  var elementRoleMap_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var _rolesMap = _interopRequireDefault(rolesMap_1);
+    function _interopRequireDefault(obj) {
+      return obj && obj.__esModule ? obj : { default: obj };
+    }
+    function _slicedToArray(arr, i2) {
+      return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i2) || _unsupportedIterableToArray(arr, i2) || _nonIterableRest();
+    }
+    function _nonIterableRest() {
+      throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+    }
+    function _unsupportedIterableToArray(o, minLen) {
+      if (!o)
+        return;
+      if (typeof o === "string")
+        return _arrayLikeToArray(o, minLen);
+      var n2 = Object.prototype.toString.call(o).slice(8, -1);
+      if (n2 === "Object" && o.constructor)
+        n2 = o.constructor.name;
+      if (n2 === "Map" || n2 === "Set")
+        return Array.from(o);
+      if (n2 === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n2))
+        return _arrayLikeToArray(o, minLen);
+    }
+    function _arrayLikeToArray(arr, len) {
+      if (len == null || len > arr.length)
+        len = arr.length;
+      for (var i2 = 0, arr2 = new Array(len); i2 < len; i2++) {
+        arr2[i2] = arr[i2];
+      }
+      return arr2;
+    }
+    function _iterableToArrayLimit(arr, i2) {
+      var _i = arr == null ? null : typeof Symbol !== "undefined" && arr[Symbol.iterator] || arr["@@iterator"];
+      if (_i == null)
+        return;
+      var _arr = [];
+      var _n = true;
+      var _d = false;
+      var _s, _e;
+      try {
+        for (_i = _i.call(arr); !(_n = (_s = _i.next()).done); _n = true) {
+          _arr.push(_s.value);
+          if (i2 && _arr.length === i2)
+            break;
+        }
+      } catch (err) {
+        _d = true;
+        _e = err;
+      } finally {
+        try {
+          if (!_n && _i["return"] != null)
+            _i["return"]();
+        } finally {
+          if (_d)
+            throw _e;
+        }
+      }
+      return _arr;
+    }
+    function _arrayWithHoles(arr) {
+      if (Array.isArray(arr))
+        return arr;
+    }
+    var elementRoles = [];
+    var keys = _rolesMap.default.keys();
+    for (var i = 0; i < keys.length; i++) {
+      var _key = keys[i];
+      var role = _rolesMap.default.get(_key);
+      if (role) {
+        var concepts = [].concat(role.baseConcepts, role.relatedConcepts);
+        for (var k = 0; k < concepts.length; k++) {
+          var relation = concepts[k];
+          if (relation.module === "HTML") {
+            var concept = relation.concept;
+            if (concept) {
+              (function() {
+                var conceptStr = JSON.stringify(concept);
+                var elementRoleRelation = elementRoles.find(function(relation2) {
+                  return JSON.stringify(relation2[0]) === conceptStr;
+                });
+                var roles2 = void 0;
+                if (elementRoleRelation) {
+                  roles2 = elementRoleRelation[1];
+                } else {
+                  roles2 = [];
+                }
+                var isUnique = true;
+                for (var _i = 0; _i < roles2.length; _i++) {
+                  if (roles2[_i] === _key) {
+                    isUnique = false;
+                    break;
+                  }
+                }
+                if (isUnique) {
+                  roles2.push(_key);
+                }
+                elementRoles.push([concept, roles2]);
+              })();
+            }
+          }
+        }
+      }
+    }
+    var elementRoleMap = {
+      entries: function entries() {
+        return elementRoles;
+      },
+      get: function get(key) {
+        var item = elementRoles.find(function(tuple) {
+          return JSON.stringify(tuple[0]) === JSON.stringify(key) ? true : false;
+        });
+        return item && item[1];
+      },
+      has: function has2(key) {
+        return !!this.get(key);
+      },
+      keys: function keys2() {
+        return elementRoles.map(function(_ref) {
+          var _ref2 = _slicedToArray(_ref, 1), key = _ref2[0];
+          return key;
+        });
+      },
+      values: function values() {
+        return elementRoles.map(function(_ref3) {
+          var _ref4 = _slicedToArray(_ref3, 2), values2 = _ref4[1];
+          return values2;
+        });
+      }
+    };
+    var _default2 = elementRoleMap;
+    exports.default = _default2;
+  });
+  unwrapExports(elementRoleMap_1);
+  var roleElementMap_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var _rolesMap = _interopRequireDefault(rolesMap_1);
+    function _interopRequireDefault(obj) {
+      return obj && obj.__esModule ? obj : { default: obj };
+    }
+    function _slicedToArray(arr, i2) {
+      return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i2) || _unsupportedIterableToArray(arr, i2) || _nonIterableRest();
+    }
+    function _nonIterableRest() {
+      throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+    }
+    function _unsupportedIterableToArray(o, minLen) {
+      if (!o)
+        return;
+      if (typeof o === "string")
+        return _arrayLikeToArray(o, minLen);
+      var n2 = Object.prototype.toString.call(o).slice(8, -1);
+      if (n2 === "Object" && o.constructor)
+        n2 = o.constructor.name;
+      if (n2 === "Map" || n2 === "Set")
+        return Array.from(o);
+      if (n2 === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n2))
+        return _arrayLikeToArray(o, minLen);
+    }
+    function _arrayLikeToArray(arr, len) {
+      if (len == null || len > arr.length)
+        len = arr.length;
+      for (var i2 = 0, arr2 = new Array(len); i2 < len; i2++) {
+        arr2[i2] = arr[i2];
+      }
+      return arr2;
+    }
+    function _iterableToArrayLimit(arr, i2) {
+      var _i = arr == null ? null : typeof Symbol !== "undefined" && arr[Symbol.iterator] || arr["@@iterator"];
+      if (_i == null)
+        return;
+      var _arr = [];
+      var _n = true;
+      var _d = false;
+      var _s, _e;
+      try {
+        for (_i = _i.call(arr); !(_n = (_s = _i.next()).done); _n = true) {
+          _arr.push(_s.value);
+          if (i2 && _arr.length === i2)
+            break;
+        }
+      } catch (err) {
+        _d = true;
+        _e = err;
+      } finally {
+        try {
+          if (!_n && _i["return"] != null)
+            _i["return"]();
+        } finally {
+          if (_d)
+            throw _e;
+        }
+      }
+      return _arr;
+    }
+    function _arrayWithHoles(arr) {
+      if (Array.isArray(arr))
+        return arr;
+    }
+    var roleElement = [];
+    var keys = _rolesMap.default.keys();
+    var _loop = function _loop2(i2) {
+      var key = keys[i2];
+      var role = _rolesMap.default.get(key);
+      if (role) {
+        var concepts = [].concat(role.baseConcepts, role.relatedConcepts);
+        for (var k = 0; k < concepts.length; k++) {
+          var relation = concepts[k];
+          if (relation.module === "HTML") {
+            var concept = relation.concept;
+            if (concept) {
+              var roleElementRelation = roleElement.find(function(item) {
+                return item[0] === key;
+              });
+              var relationConcepts = void 0;
+              if (roleElementRelation) {
+                relationConcepts = roleElementRelation[1];
+              } else {
+                relationConcepts = [];
+              }
+              relationConcepts.push(concept);
+              roleElement.push([key, relationConcepts]);
+            }
+          }
+        }
+      }
+    };
+    for (var i = 0; i < keys.length; i++) {
+      _loop(i);
+    }
+    var roleElementMap = {
+      entries: function entries() {
+        return roleElement;
+      },
+      get: function get(key) {
+        var item = roleElement.find(function(tuple) {
+          return tuple[0] === key ? true : false;
+        });
+        return item && item[1];
+      },
+      has: function has2(key) {
+        return !!this.get(key);
+      },
+      keys: function keys2() {
+        return roleElement.map(function(_ref) {
+          var _ref2 = _slicedToArray(_ref, 1), key = _ref2[0];
+          return key;
+        });
+      },
+      values: function values() {
+        return roleElement.map(function(_ref3) {
+          var _ref4 = _slicedToArray(_ref3, 2), values2 = _ref4[1];
+          return values2;
+        });
+      }
+    };
+    var _default2 = roleElementMap;
+    exports.default = _default2;
+  });
+  unwrapExports(roleElementMap_1);
+  var lib = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.roleElements = exports.elementRoles = exports.roles = exports.dom = exports.aria = void 0;
+    var _ariaPropsMap = _interopRequireDefault(ariaPropsMap_1);
+    var _domMap = _interopRequireDefault(domMap_1);
+    var _rolesMap = _interopRequireDefault(rolesMap_1);
+    var _elementRoleMap = _interopRequireDefault(elementRoleMap_1);
+    var _roleElementMap = _interopRequireDefault(roleElementMap_1);
+    function _interopRequireDefault(obj) {
+      return obj && obj.__esModule ? obj : { default: obj };
+    }
+    var aria = _ariaPropsMap.default;
+    exports.aria = aria;
+    var dom2 = _domMap.default;
+    exports.dom = dom2;
+    var roles2 = _rolesMap.default;
+    exports.roles = roles2;
+    var elementRoles = _elementRoleMap.default;
+    exports.elementRoles = elementRoles;
+    var roleElements = _roleElementMap.default;
+    exports.roleElements = roleElements;
+  });
+  unwrapExports(lib);
+  var lib_1 = lib.roleElements;
+  var lib_2 = lib.elementRoles;
+  var lib_3 = lib.roles;
+  var lib_4 = lib.dom;
+  var lib_5 = lib.aria;
+  var AbbrRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var AbbrRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "abbr"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = AbbrRole;
+    exports.default = _default2;
+  });
+  unwrapExports(AbbrRole_1);
+  var AlertDialogRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var AlertDialogRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "alertdialog"
+        }
+      }],
+      type: "window"
+    };
+    var _default2 = AlertDialogRole;
+    exports.default = _default2;
+  });
+  unwrapExports(AlertDialogRole_1);
+  var AlertRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var AlertRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "alert"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = AlertRole;
+    exports.default = _default2;
+  });
+  unwrapExports(AlertRole_1);
+  var AnnotationRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var AnnotationRole = {
+      relatedConcepts: [],
+      type: "structure"
+    };
+    var _default2 = AnnotationRole;
+    exports.default = _default2;
+  });
+  unwrapExports(AnnotationRole_1);
+  var ApplicationRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var ApplicationRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "application"
+        }
+      }],
+      type: "window"
+    };
+    var _default2 = ApplicationRole;
+    exports.default = _default2;
+  });
+  unwrapExports(ApplicationRole_1);
+  var ArticleRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var ArticleRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "article"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "article"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = ArticleRole;
+    exports.default = _default2;
+  });
+  unwrapExports(ArticleRole_1);
+  var AudioRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var AudioRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "audio"
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = AudioRole;
+    exports.default = _default2;
+  });
+  unwrapExports(AudioRole_1);
+  var BannerRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var BannerRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "banner"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = BannerRole;
+    exports.default = _default2;
+  });
+  unwrapExports(BannerRole_1);
+  var BlockquoteRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var BlockquoteRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "blockquote"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = BlockquoteRole;
+    exports.default = _default2;
+  });
+  unwrapExports(BlockquoteRole_1);
+  var BusyIndicatorRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var BusyIndicatorRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          attributes: [{
+            name: "aria-busy",
+            value: "true"
+          }]
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = BusyIndicatorRole;
+    exports.default = _default2;
+  });
+  unwrapExports(BusyIndicatorRole_1);
+  var ButtonRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var ButtonRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "button"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "button"
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = ButtonRole;
+    exports.default = _default2;
+  });
+  unwrapExports(ButtonRole_1);
+  var CanvasRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var CanvasRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "canvas"
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = CanvasRole;
+    exports.default = _default2;
+  });
+  unwrapExports(CanvasRole_1);
+  var CaptionRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var CaptionRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "caption"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = CaptionRole;
+    exports.default = _default2;
+  });
+  unwrapExports(CaptionRole_1);
+  var CellRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var CellRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "cell"
+        }
+      }, {
+        module: "ARIA",
+        concept: {
+          name: "gridcell"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "td"
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = CellRole;
+    exports.default = _default2;
+  });
+  unwrapExports(CellRole_1);
+  var CheckBoxRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var CheckBoxRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "checkbox"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "input",
+          attributes: [{
+            name: "type",
+            value: "checkbox"
+          }]
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = CheckBoxRole;
+    exports.default = _default2;
+  });
+  unwrapExports(CheckBoxRole_1);
+  var ColorWellRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var ColorWellRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "input",
+          attributes: [{
+            name: "type",
+            value: "color"
+          }]
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = ColorWellRole;
+    exports.default = _default2;
+  });
+  unwrapExports(ColorWellRole_1);
+  var ColumnHeaderRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var ColumnHeaderRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "columnheader"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "th"
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = ColumnHeaderRole;
+    exports.default = _default2;
+  });
+  unwrapExports(ColumnHeaderRole_1);
+  var ColumnRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var ColumnRole = {
+      relatedConcepts: [],
+      type: "structure"
+    };
+    var _default2 = ColumnRole;
+    exports.default = _default2;
+  });
+  unwrapExports(ColumnRole_1);
+  var ComboBoxRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var ComboBoxRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "combobox"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "select"
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = ComboBoxRole;
+    exports.default = _default2;
+  });
+  unwrapExports(ComboBoxRole_1);
+  var ComplementaryRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var ComplementaryRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "complementary"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = ComplementaryRole;
+    exports.default = _default2;
+  });
+  unwrapExports(ComplementaryRole_1);
+  var ContentInfoRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var ContentInfoRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "structureinfo"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = ContentInfoRole;
+    exports.default = _default2;
+  });
+  unwrapExports(ContentInfoRole_1);
+  var DateRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var DateRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "input",
+          attributes: [{
+            name: "type",
+            value: "date"
+          }]
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = DateRole;
+    exports.default = _default2;
+  });
+  unwrapExports(DateRole_1);
+  var DateTimeRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var DateTimeRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "input",
+          attributes: [{
+            name: "type",
+            value: "datetime"
+          }]
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = DateTimeRole;
+    exports.default = _default2;
+  });
+  unwrapExports(DateTimeRole_1);
+  var DefinitionRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var DefinitionRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "dfn"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = DefinitionRole;
+    exports.default = _default2;
+  });
+  unwrapExports(DefinitionRole_1);
+  var DescriptionListDetailRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var DescriptionListDetailRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "dd"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = DescriptionListDetailRole;
+    exports.default = _default2;
+  });
+  unwrapExports(DescriptionListDetailRole_1);
+  var DescriptionListRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var DescriptionListRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "dl"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = DescriptionListRole;
+    exports.default = _default2;
+  });
+  unwrapExports(DescriptionListRole_1);
+  var DescriptionListTermRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var DescriptionListTermRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "dt"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = DescriptionListTermRole;
+    exports.default = _default2;
+  });
+  unwrapExports(DescriptionListTermRole_1);
+  var DetailsRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var DetailsRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "details"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = DetailsRole;
+    exports.default = _default2;
+  });
+  unwrapExports(DetailsRole_1);
+  var DialogRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var DialogRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "dialog"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "dialog"
+        }
+      }],
+      type: "window"
+    };
+    var _default2 = DialogRole;
+    exports.default = _default2;
+  });
+  unwrapExports(DialogRole_1);
+  var DirectoryRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var DirectoryRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "directory"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "dir"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = DirectoryRole;
+    exports.default = _default2;
+  });
+  unwrapExports(DirectoryRole_1);
+  var DisclosureTriangleRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var DisclosureTriangleRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "summary"
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = DisclosureTriangleRole;
+    exports.default = _default2;
+  });
+  unwrapExports(DisclosureTriangleRole_1);
+  var DivRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var DivRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "div"
+        }
+      }],
+      type: "generic"
+    };
+    var _default2 = DivRole;
+    exports.default = _default2;
+  });
+  unwrapExports(DivRole_1);
+  var DocumentRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var DocumentRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "document"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = DocumentRole;
+    exports.default = _default2;
+  });
+  unwrapExports(DocumentRole_1);
+  var EmbeddedObjectRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var EmbeddedObjectRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "embed"
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = EmbeddedObjectRole;
+    exports.default = _default2;
+  });
+  unwrapExports(EmbeddedObjectRole_1);
+  var FeedRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var FeedRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "feed"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = FeedRole;
+    exports.default = _default2;
+  });
+  unwrapExports(FeedRole_1);
+  var FigcaptionRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var FigcaptionRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "figcaption"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = FigcaptionRole;
+    exports.default = _default2;
+  });
+  unwrapExports(FigcaptionRole_1);
+  var FigureRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var FigureRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "figure"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "figure"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = FigureRole;
+    exports.default = _default2;
+  });
+  unwrapExports(FigureRole_1);
+  var FooterRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var FooterRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "footer"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = FooterRole;
+    exports.default = _default2;
+  });
+  unwrapExports(FooterRole_1);
+  var FormRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var FormRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "form"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "form"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = FormRole;
+    exports.default = _default2;
+  });
+  unwrapExports(FormRole_1);
+  var GridRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var GridRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "grid"
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = GridRole;
+    exports.default = _default2;
+  });
+  unwrapExports(GridRole_1);
+  var GroupRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var GroupRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "group"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = GroupRole;
+    exports.default = _default2;
+  });
+  unwrapExports(GroupRole_1);
+  var HeadingRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var HeadingRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "heading"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "h1"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "h2"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "h3"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "h4"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "h5"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "h6"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = HeadingRole;
+    exports.default = _default2;
+  });
+  unwrapExports(HeadingRole_1);
+  var IframePresentationalRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var IframePresentationalRole = {
+      relatedConcepts: [],
+      type: "window"
+    };
+    var _default2 = IframePresentationalRole;
+    exports.default = _default2;
+  });
+  unwrapExports(IframePresentationalRole_1);
+  var IframeRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var IframeRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "iframe"
+        }
+      }],
+      type: "window"
+    };
+    var _default2 = IframeRole;
+    exports.default = _default2;
+  });
+  unwrapExports(IframeRole_1);
+  var IgnoredRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var IgnoredRole = {
+      relatedConcepts: [],
+      type: "structure"
+    };
+    var _default2 = IgnoredRole;
+    exports.default = _default2;
+  });
+  unwrapExports(IgnoredRole_1);
+  var ImageMapLinkRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var ImageMapLinkRole = {
+      relatedConcepts: [],
+      type: "widget"
+    };
+    var _default2 = ImageMapLinkRole;
+    exports.default = _default2;
+  });
+  unwrapExports(ImageMapLinkRole_1);
+  var ImageMapRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var ImageMapRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "img",
+          attributes: [{
+            name: "usemap"
+          }]
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = ImageMapRole;
+    exports.default = _default2;
+  });
+  unwrapExports(ImageMapRole_1);
+  var ImageRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var ImageRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "img"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "img"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = ImageRole;
+    exports.default = _default2;
+  });
+  unwrapExports(ImageRole_1);
+  var InlineTextBoxRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var InlineTextBoxRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "input"
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = InlineTextBoxRole;
+    exports.default = _default2;
+  });
+  unwrapExports(InlineTextBoxRole_1);
+  var InputTimeRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var InputTimeRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "input",
+          attributes: [{
+            name: "type",
+            value: "time"
+          }]
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = InputTimeRole;
+    exports.default = _default2;
+  });
+  unwrapExports(InputTimeRole_1);
+  var LabelRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var LabelRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "label"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = LabelRole;
+    exports.default = _default2;
+  });
+  unwrapExports(LabelRole_1);
+  var LegendRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var LegendRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "legend"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = LegendRole;
+    exports.default = _default2;
+  });
+  unwrapExports(LegendRole_1);
+  var LineBreakRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var LineBreakRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "br"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = LineBreakRole;
+    exports.default = _default2;
+  });
+  unwrapExports(LineBreakRole_1);
+  var LinkRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var LinkRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "link"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "a",
+          attributes: [{
+            name: "href"
+          }]
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = LinkRole;
+    exports.default = _default2;
+  });
+  unwrapExports(LinkRole_1);
+  var ListBoxOptionRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var ListBoxOptionRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "option"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "option"
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = ListBoxOptionRole;
+    exports.default = _default2;
+  });
+  unwrapExports(ListBoxOptionRole_1);
+  var ListBoxRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var ListBoxRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "listbox"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "datalist"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "select"
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = ListBoxRole;
+    exports.default = _default2;
+  });
+  unwrapExports(ListBoxRole_1);
+  var ListItemRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var ListItemRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "listitem"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "li"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = ListItemRole;
+    exports.default = _default2;
+  });
+  unwrapExports(ListItemRole_1);
+  var ListMarkerRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var ListMarkerRole = {
+      relatedConcepts: [],
+      type: "structure"
+    };
+    var _default2 = ListMarkerRole;
+    exports.default = _default2;
+  });
+  unwrapExports(ListMarkerRole_1);
+  var ListRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var ListRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "list"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "ul"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "ol"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = ListRole;
+    exports.default = _default2;
+  });
+  unwrapExports(ListRole_1);
+  var LogRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var LogRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "log"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = LogRole;
+    exports.default = _default2;
+  });
+  unwrapExports(LogRole_1);
+  var MainRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var MainRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "main"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "main"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = MainRole;
+    exports.default = _default2;
+  });
+  unwrapExports(MainRole_1);
+  var MarkRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var MarkRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "mark"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = MarkRole;
+    exports.default = _default2;
+  });
+  unwrapExports(MarkRole_1);
+  var MarqueeRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var MarqueeRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "marquee"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "marquee"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = MarqueeRole;
+    exports.default = _default2;
+  });
+  unwrapExports(MarqueeRole_1);
+  var MathRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var MathRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "math"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = MathRole;
+    exports.default = _default2;
+  });
+  unwrapExports(MathRole_1);
+  var MenuBarRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var MenuBarRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "menubar"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = MenuBarRole;
+    exports.default = _default2;
+  });
+  unwrapExports(MenuBarRole_1);
+  var MenuButtonRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var MenuButtonRole = {
+      relatedConcepts: [],
+      type: "widget"
+    };
+    var _default2 = MenuButtonRole;
+    exports.default = _default2;
+  });
+  unwrapExports(MenuButtonRole_1);
+  var MenuItemRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var MenuItemRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "menuitem"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "menuitem"
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = MenuItemRole;
+    exports.default = _default2;
+  });
+  unwrapExports(MenuItemRole_1);
+  var MenuItemCheckBoxRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var MenuItemCheckBoxRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "menuitemcheckbox"
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = MenuItemCheckBoxRole;
+    exports.default = _default2;
+  });
+  unwrapExports(MenuItemCheckBoxRole_1);
+  var MenuItemRadioRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var MenuItemRadioRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "menuitemradio"
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = MenuItemRadioRole;
+    exports.default = _default2;
+  });
+  unwrapExports(MenuItemRadioRole_1);
+  var MenuListOptionRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var MenuListOptionRole = {
+      relatedConcepts: [],
+      type: "widget"
+    };
+    var _default2 = MenuListOptionRole;
+    exports.default = _default2;
+  });
+  unwrapExports(MenuListOptionRole_1);
+  var MenuListPopupRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var MenuListPopupRole = {
+      relatedConcepts: [],
+      type: "widget"
+    };
+    var _default2 = MenuListPopupRole;
+    exports.default = _default2;
+  });
+  unwrapExports(MenuListPopupRole_1);
+  var MenuRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var MenuRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "menu"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "menu"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = MenuRole;
+    exports.default = _default2;
+  });
+  unwrapExports(MenuRole_1);
+  var MeterRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var MeterRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "meter"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = MeterRole;
+    exports.default = _default2;
+  });
+  unwrapExports(MeterRole_1);
+  var NavigationRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var NavigationRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "navigation"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "nav"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = NavigationRole;
+    exports.default = _default2;
+  });
+  unwrapExports(NavigationRole_1);
+  var NoneRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var NoneRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "none"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = NoneRole;
+    exports.default = _default2;
+  });
+  unwrapExports(NoneRole_1);
+  var NoteRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var NoteRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "note"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = NoteRole;
+    exports.default = _default2;
+  });
+  unwrapExports(NoteRole_1);
+  var OutlineRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var OutlineRole = {
+      relatedConcepts: [],
+      type: "structure"
+    };
+    var _default2 = OutlineRole;
+    exports.default = _default2;
+  });
+  unwrapExports(OutlineRole_1);
+  var ParagraphRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var ParagraphRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "p"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = ParagraphRole;
+    exports.default = _default2;
+  });
+  unwrapExports(ParagraphRole_1);
+  var PopUpButtonRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var PopUpButtonRole = {
+      relatedConcepts: [],
+      type: "widget"
+    };
+    var _default2 = PopUpButtonRole;
+    exports.default = _default2;
+  });
+  unwrapExports(PopUpButtonRole_1);
+  var PreRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var PreRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "pre"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = PreRole;
+    exports.default = _default2;
+  });
+  unwrapExports(PreRole_1);
+  var PresentationalRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var PresentationalRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "presentation"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = PresentationalRole;
+    exports.default = _default2;
+  });
+  unwrapExports(PresentationalRole_1);
+  var ProgressIndicatorRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var ProgressIndicatorRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "progressbar"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "progress"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = ProgressIndicatorRole;
+    exports.default = _default2;
+  });
+  unwrapExports(ProgressIndicatorRole_1);
+  var RadioButtonRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var RadioButtonRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "radio"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "input",
+          attributes: [{
+            name: "type",
+            value: "radio"
+          }]
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = RadioButtonRole;
+    exports.default = _default2;
+  });
+  unwrapExports(RadioButtonRole_1);
+  var RadioGroupRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var RadioGroupRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "radiogroup"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = RadioGroupRole;
+    exports.default = _default2;
+  });
+  unwrapExports(RadioGroupRole_1);
+  var RegionRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var RegionRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "region"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = RegionRole;
+    exports.default = _default2;
+  });
+  unwrapExports(RegionRole_1);
+  var RootWebAreaRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var RootWebAreaRole = {
+      relatedConcepts: [],
+      type: "structure"
+    };
+    var _default2 = RootWebAreaRole;
+    exports.default = _default2;
+  });
+  unwrapExports(RootWebAreaRole_1);
+  var RowHeaderRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var RowHeaderRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "rowheader"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "th",
+          attributes: [{
+            name: "scope",
+            value: "row"
+          }]
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = RowHeaderRole;
+    exports.default = _default2;
+  });
+  unwrapExports(RowHeaderRole_1);
+  var RowRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var RowRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "row"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "tr"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = RowRole;
+    exports.default = _default2;
+  });
+  unwrapExports(RowRole_1);
+  var RubyRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var RubyRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "ruby"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = RubyRole;
+    exports.default = _default2;
+  });
+  unwrapExports(RubyRole_1);
+  var RulerRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var RulerRole = {
+      relatedConcepts: [],
+      type: "structure"
+    };
+    var _default2 = RulerRole;
+    exports.default = _default2;
+  });
+  unwrapExports(RulerRole_1);
+  var ScrollAreaRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var ScrollAreaRole = {
+      relatedConcepts: [],
+      type: "structure"
+    };
+    var _default2 = ScrollAreaRole;
+    exports.default = _default2;
+  });
+  unwrapExports(ScrollAreaRole_1);
+  var ScrollBarRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var ScrollBarRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "scrollbar"
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = ScrollBarRole;
+    exports.default = _default2;
+  });
+  unwrapExports(ScrollBarRole_1);
+  var SeamlessWebAreaRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var SeamlessWebAreaRole = {
+      relatedConcepts: [],
+      type: "structure"
+    };
+    var _default2 = SeamlessWebAreaRole;
+    exports.default = _default2;
+  });
+  unwrapExports(SeamlessWebAreaRole_1);
+  var SearchRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var SearchRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "search"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = SearchRole;
+    exports.default = _default2;
+  });
+  unwrapExports(SearchRole_1);
+  var SearchBoxRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var SearchBoxRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "searchbox"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "input",
+          attributes: [{
+            name: "type",
+            value: "search"
+          }]
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = SearchBoxRole;
+    exports.default = _default2;
+  });
+  unwrapExports(SearchBoxRole_1);
+  var SliderRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var SliderRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "slider"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "input",
+          attributes: [{
+            name: "type",
+            value: "range"
+          }]
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = SliderRole;
+    exports.default = _default2;
+  });
+  unwrapExports(SliderRole_1);
+  var SliderThumbRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var SliderThumbRole = {
+      relatedConcepts: [],
+      type: "structure"
+    };
+    var _default2 = SliderThumbRole;
+    exports.default = _default2;
+  });
+  unwrapExports(SliderThumbRole_1);
+  var SpinButtonRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var SpinButtonRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "spinbutton"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "input",
+          attributes: [{
+            name: "type",
+            value: "number"
+          }]
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = SpinButtonRole;
+    exports.default = _default2;
+  });
+  unwrapExports(SpinButtonRole_1);
+  var SpinButtonPartRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var SpinButtonPartRole = {
+      relatedConcepts: [],
+      type: "structure"
+    };
+    var _default2 = SpinButtonPartRole;
+    exports.default = _default2;
+  });
+  unwrapExports(SpinButtonPartRole_1);
+  var SplitterRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var SplitterRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "separator"
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = SplitterRole;
+    exports.default = _default2;
+  });
+  unwrapExports(SplitterRole_1);
+  var StaticTextRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var StaticTextRole = {
+      relatedConcepts: [],
+      type: "structure"
+    };
+    var _default2 = StaticTextRole;
+    exports.default = _default2;
+  });
+  unwrapExports(StaticTextRole_1);
+  var StatusRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var StatusRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "status"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = StatusRole;
+    exports.default = _default2;
+  });
+  unwrapExports(StatusRole_1);
+  var SVGRootRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var SVGRootRole = {
+      relatedConcepts: [],
+      type: "structure"
+    };
+    var _default2 = SVGRootRole;
+    exports.default = _default2;
+  });
+  unwrapExports(SVGRootRole_1);
+  var SwitchRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var SwitchRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "switch"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "input",
+          attributes: [{
+            name: "type",
+            value: "checkbox"
+          }]
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = SwitchRole;
+    exports.default = _default2;
+  });
+  unwrapExports(SwitchRole_1);
+  var TabGroupRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var TabGroupRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "tablist"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = TabGroupRole;
+    exports.default = _default2;
+  });
+  unwrapExports(TabGroupRole_1);
+  var TabRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var TabRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "tab"
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = TabRole;
+    exports.default = _default2;
+  });
+  unwrapExports(TabRole_1);
+  var TableHeaderContainerRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var TableHeaderContainerRole = {
+      relatedConcepts: [],
+      type: "structure"
+    };
+    var _default2 = TableHeaderContainerRole;
+    exports.default = _default2;
+  });
+  unwrapExports(TableHeaderContainerRole_1);
+  var TableRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var TableRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "table"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "table"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = TableRole;
+    exports.default = _default2;
+  });
+  unwrapExports(TableRole_1);
+  var TabListRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var TabListRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "tablist"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = TabListRole;
+    exports.default = _default2;
+  });
+  unwrapExports(TabListRole_1);
+  var TabPanelRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var TabPanelRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "tabpanel"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = TabPanelRole;
+    exports.default = _default2;
+  });
+  unwrapExports(TabPanelRole_1);
+  var TermRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var TermRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "term"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = TermRole;
+    exports.default = _default2;
+  });
+  unwrapExports(TermRole_1);
+  var TextFieldRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var TextFieldRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "textbox"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "input"
+        }
+      }, {
+        module: "HTML",
+        concept: {
+          name: "input",
+          attributes: [{
+            name: "type",
+            value: "text"
+          }]
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = TextFieldRole;
+    exports.default = _default2;
+  });
+  unwrapExports(TextFieldRole_1);
+  var TimeRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var TimeRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "time"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = TimeRole;
+    exports.default = _default2;
+  });
+  unwrapExports(TimeRole_1);
+  var TimerRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var TimerRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "timer"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = TimerRole;
+    exports.default = _default2;
+  });
+  unwrapExports(TimerRole_1);
+  var ToggleButtonRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var ToggleButtonRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          attributes: [{
+            name: "aria-pressed"
+          }]
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = ToggleButtonRole;
+    exports.default = _default2;
+  });
+  unwrapExports(ToggleButtonRole_1);
+  var ToolbarRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var ToolbarRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "toolbar"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = ToolbarRole;
+    exports.default = _default2;
+  });
+  unwrapExports(ToolbarRole_1);
+  var TreeRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var TreeRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "tree"
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = TreeRole;
+    exports.default = _default2;
+  });
+  unwrapExports(TreeRole_1);
+  var TreeGridRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var TreeGridRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "treegrid"
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = TreeGridRole;
+    exports.default = _default2;
+  });
+  unwrapExports(TreeGridRole_1);
+  var TreeItemRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var TreeItemRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "treeitem"
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = TreeItemRole;
+    exports.default = _default2;
+  });
+  unwrapExports(TreeItemRole_1);
+  var UserInterfaceTooltipRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var UserInterfaceTooltipRole = {
+      relatedConcepts: [{
+        module: "ARIA",
+        concept: {
+          name: "tooltip"
+        }
+      }],
+      type: "structure"
+    };
+    var _default2 = UserInterfaceTooltipRole;
+    exports.default = _default2;
+  });
+  unwrapExports(UserInterfaceTooltipRole_1);
+  var VideoRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var VideoRole = {
+      relatedConcepts: [{
+        module: "HTML",
+        concept: {
+          name: "video"
+        }
+      }],
+      type: "widget"
+    };
+    var _default2 = VideoRole;
+    exports.default = _default2;
+  });
+  unwrapExports(VideoRole_1);
+  var WebAreaRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var WebAreaRole = {
+      relatedConcepts: [],
+      type: "structure"
+    };
+    var _default2 = WebAreaRole;
+    exports.default = _default2;
+  });
+  unwrapExports(WebAreaRole_1);
+  var WindowRole_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var WindowRole = {
+      relatedConcepts: [],
+      type: "window"
+    };
+    var _default2 = WindowRole;
+    exports.default = _default2;
+  });
+  unwrapExports(WindowRole_1);
+  var AXObjectsMap_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var _AbbrRole = _interopRequireDefault(AbbrRole_1);
+    var _AlertDialogRole = _interopRequireDefault(AlertDialogRole_1);
+    var _AlertRole = _interopRequireDefault(AlertRole_1);
+    var _AnnotationRole = _interopRequireDefault(AnnotationRole_1);
+    var _ApplicationRole = _interopRequireDefault(ApplicationRole_1);
+    var _ArticleRole = _interopRequireDefault(ArticleRole_1);
+    var _AudioRole = _interopRequireDefault(AudioRole_1);
+    var _BannerRole = _interopRequireDefault(BannerRole_1);
+    var _BlockquoteRole = _interopRequireDefault(BlockquoteRole_1);
+    var _BusyIndicatorRole = _interopRequireDefault(BusyIndicatorRole_1);
+    var _ButtonRole = _interopRequireDefault(ButtonRole_1);
+    var _CanvasRole = _interopRequireDefault(CanvasRole_1);
+    var _CaptionRole = _interopRequireDefault(CaptionRole_1);
+    var _CellRole = _interopRequireDefault(CellRole_1);
+    var _CheckBoxRole = _interopRequireDefault(CheckBoxRole_1);
+    var _ColorWellRole = _interopRequireDefault(ColorWellRole_1);
+    var _ColumnHeaderRole = _interopRequireDefault(ColumnHeaderRole_1);
+    var _ColumnRole = _interopRequireDefault(ColumnRole_1);
+    var _ComboBoxRole = _interopRequireDefault(ComboBoxRole_1);
+    var _ComplementaryRole = _interopRequireDefault(ComplementaryRole_1);
+    var _ContentInfoRole = _interopRequireDefault(ContentInfoRole_1);
+    var _DateRole = _interopRequireDefault(DateRole_1);
+    var _DateTimeRole = _interopRequireDefault(DateTimeRole_1);
+    var _DefinitionRole = _interopRequireDefault(DefinitionRole_1);
+    var _DescriptionListDetailRole = _interopRequireDefault(DescriptionListDetailRole_1);
+    var _DescriptionListRole = _interopRequireDefault(DescriptionListRole_1);
+    var _DescriptionListTermRole = _interopRequireDefault(DescriptionListTermRole_1);
+    var _DetailsRole = _interopRequireDefault(DetailsRole_1);
+    var _DialogRole = _interopRequireDefault(DialogRole_1);
+    var _DirectoryRole = _interopRequireDefault(DirectoryRole_1);
+    var _DisclosureTriangleRole = _interopRequireDefault(DisclosureTriangleRole_1);
+    var _DivRole = _interopRequireDefault(DivRole_1);
+    var _DocumentRole = _interopRequireDefault(DocumentRole_1);
+    var _EmbeddedObjectRole = _interopRequireDefault(EmbeddedObjectRole_1);
+    var _FeedRole = _interopRequireDefault(FeedRole_1);
+    var _FigcaptionRole = _interopRequireDefault(FigcaptionRole_1);
+    var _FigureRole = _interopRequireDefault(FigureRole_1);
+    var _FooterRole = _interopRequireDefault(FooterRole_1);
+    var _FormRole = _interopRequireDefault(FormRole_1);
+    var _GridRole = _interopRequireDefault(GridRole_1);
+    var _GroupRole = _interopRequireDefault(GroupRole_1);
+    var _HeadingRole = _interopRequireDefault(HeadingRole_1);
+    var _IframePresentationalRole = _interopRequireDefault(IframePresentationalRole_1);
+    var _IframeRole = _interopRequireDefault(IframeRole_1);
+    var _IgnoredRole = _interopRequireDefault(IgnoredRole_1);
+    var _ImageMapLinkRole = _interopRequireDefault(ImageMapLinkRole_1);
+    var _ImageMapRole = _interopRequireDefault(ImageMapRole_1);
+    var _ImageRole = _interopRequireDefault(ImageRole_1);
+    var _InlineTextBoxRole = _interopRequireDefault(InlineTextBoxRole_1);
+    var _InputTimeRole = _interopRequireDefault(InputTimeRole_1);
+    var _LabelRole = _interopRequireDefault(LabelRole_1);
+    var _LegendRole = _interopRequireDefault(LegendRole_1);
+    var _LineBreakRole = _interopRequireDefault(LineBreakRole_1);
+    var _LinkRole = _interopRequireDefault(LinkRole_1);
+    var _ListBoxOptionRole = _interopRequireDefault(ListBoxOptionRole_1);
+    var _ListBoxRole = _interopRequireDefault(ListBoxRole_1);
+    var _ListItemRole = _interopRequireDefault(ListItemRole_1);
+    var _ListMarkerRole = _interopRequireDefault(ListMarkerRole_1);
+    var _ListRole = _interopRequireDefault(ListRole_1);
+    var _LogRole = _interopRequireDefault(LogRole_1);
+    var _MainRole = _interopRequireDefault(MainRole_1);
+    var _MarkRole = _interopRequireDefault(MarkRole_1);
+    var _MarqueeRole = _interopRequireDefault(MarqueeRole_1);
+    var _MathRole = _interopRequireDefault(MathRole_1);
+    var _MenuBarRole = _interopRequireDefault(MenuBarRole_1);
+    var _MenuButtonRole = _interopRequireDefault(MenuButtonRole_1);
+    var _MenuItemRole = _interopRequireDefault(MenuItemRole_1);
+    var _MenuItemCheckBoxRole = _interopRequireDefault(MenuItemCheckBoxRole_1);
+    var _MenuItemRadioRole = _interopRequireDefault(MenuItemRadioRole_1);
+    var _MenuListOptionRole = _interopRequireDefault(MenuListOptionRole_1);
+    var _MenuListPopupRole = _interopRequireDefault(MenuListPopupRole_1);
+    var _MenuRole = _interopRequireDefault(MenuRole_1);
+    var _MeterRole = _interopRequireDefault(MeterRole_1);
+    var _NavigationRole = _interopRequireDefault(NavigationRole_1);
+    var _NoneRole = _interopRequireDefault(NoneRole_1);
+    var _NoteRole = _interopRequireDefault(NoteRole_1);
+    var _OutlineRole = _interopRequireDefault(OutlineRole_1);
+    var _ParagraphRole = _interopRequireDefault(ParagraphRole_1);
+    var _PopUpButtonRole = _interopRequireDefault(PopUpButtonRole_1);
+    var _PreRole = _interopRequireDefault(PreRole_1);
+    var _PresentationalRole = _interopRequireDefault(PresentationalRole_1);
+    var _ProgressIndicatorRole = _interopRequireDefault(ProgressIndicatorRole_1);
+    var _RadioButtonRole = _interopRequireDefault(RadioButtonRole_1);
+    var _RadioGroupRole = _interopRequireDefault(RadioGroupRole_1);
+    var _RegionRole = _interopRequireDefault(RegionRole_1);
+    var _RootWebAreaRole = _interopRequireDefault(RootWebAreaRole_1);
+    var _RowHeaderRole = _interopRequireDefault(RowHeaderRole_1);
+    var _RowRole = _interopRequireDefault(RowRole_1);
+    var _RubyRole = _interopRequireDefault(RubyRole_1);
+    var _RulerRole = _interopRequireDefault(RulerRole_1);
+    var _ScrollAreaRole = _interopRequireDefault(ScrollAreaRole_1);
+    var _ScrollBarRole = _interopRequireDefault(ScrollBarRole_1);
+    var _SeamlessWebAreaRole = _interopRequireDefault(SeamlessWebAreaRole_1);
+    var _SearchRole = _interopRequireDefault(SearchRole_1);
+    var _SearchBoxRole = _interopRequireDefault(SearchBoxRole_1);
+    var _SliderRole = _interopRequireDefault(SliderRole_1);
+    var _SliderThumbRole = _interopRequireDefault(SliderThumbRole_1);
+    var _SpinButtonRole = _interopRequireDefault(SpinButtonRole_1);
+    var _SpinButtonPartRole = _interopRequireDefault(SpinButtonPartRole_1);
+    var _SplitterRole = _interopRequireDefault(SplitterRole_1);
+    var _StaticTextRole = _interopRequireDefault(StaticTextRole_1);
+    var _StatusRole = _interopRequireDefault(StatusRole_1);
+    var _SVGRootRole = _interopRequireDefault(SVGRootRole_1);
+    var _SwitchRole = _interopRequireDefault(SwitchRole_1);
+    var _TabGroupRole = _interopRequireDefault(TabGroupRole_1);
+    var _TabRole = _interopRequireDefault(TabRole_1);
+    var _TableHeaderContainerRole = _interopRequireDefault(TableHeaderContainerRole_1);
+    var _TableRole = _interopRequireDefault(TableRole_1);
+    var _TabListRole = _interopRequireDefault(TabListRole_1);
+    var _TabPanelRole = _interopRequireDefault(TabPanelRole_1);
+    var _TermRole = _interopRequireDefault(TermRole_1);
+    var _TextFieldRole = _interopRequireDefault(TextFieldRole_1);
+    var _TimeRole = _interopRequireDefault(TimeRole_1);
+    var _TimerRole = _interopRequireDefault(TimerRole_1);
+    var _ToggleButtonRole = _interopRequireDefault(ToggleButtonRole_1);
+    var _ToolbarRole = _interopRequireDefault(ToolbarRole_1);
+    var _TreeRole = _interopRequireDefault(TreeRole_1);
+    var _TreeGridRole = _interopRequireDefault(TreeGridRole_1);
+    var _TreeItemRole = _interopRequireDefault(TreeItemRole_1);
+    var _UserInterfaceTooltipRole = _interopRequireDefault(UserInterfaceTooltipRole_1);
+    var _VideoRole = _interopRequireDefault(VideoRole_1);
+    var _WebAreaRole = _interopRequireDefault(WebAreaRole_1);
+    var _WindowRole = _interopRequireDefault(WindowRole_1);
+    function _interopRequireDefault(obj) {
+      return obj && obj.__esModule ? obj : { default: obj };
+    }
+    function _slicedToArray(arr, i) {
+      return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _unsupportedIterableToArray(arr, i) || _nonIterableRest();
+    }
+    function _nonIterableRest() {
+      throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+    }
+    function _unsupportedIterableToArray(o, minLen) {
+      if (!o)
+        return;
+      if (typeof o === "string")
+        return _arrayLikeToArray(o, minLen);
+      var n2 = Object.prototype.toString.call(o).slice(8, -1);
+      if (n2 === "Object" && o.constructor)
+        n2 = o.constructor.name;
+      if (n2 === "Map" || n2 === "Set")
+        return Array.from(o);
+      if (n2 === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n2))
+        return _arrayLikeToArray(o, minLen);
+    }
+    function _arrayLikeToArray(arr, len) {
+      if (len == null || len > arr.length)
+        len = arr.length;
+      for (var i = 0, arr2 = new Array(len); i < len; i++) {
+        arr2[i] = arr[i];
+      }
+      return arr2;
+    }
+    function _iterableToArrayLimit(arr, i) {
+      var _i = arr == null ? null : typeof Symbol !== "undefined" && arr[Symbol.iterator] || arr["@@iterator"];
+      if (_i == null)
+        return;
+      var _arr = [];
+      var _n = true;
+      var _d = false;
+      var _s, _e;
+      try {
+        for (_i = _i.call(arr); !(_n = (_s = _i.next()).done); _n = true) {
+          _arr.push(_s.value);
+          if (i && _arr.length === i)
+            break;
+        }
+      } catch (err) {
+        _d = true;
+        _e = err;
+      } finally {
+        try {
+          if (!_n && _i["return"] != null)
+            _i["return"]();
+        } finally {
+          if (_d)
+            throw _e;
+        }
+      }
+      return _arr;
+    }
+    function _arrayWithHoles(arr) {
+      if (Array.isArray(arr))
+        return arr;
+    }
+    var AXObjects = [["AbbrRole", _AbbrRole.default], ["AlertDialogRole", _AlertDialogRole.default], ["AlertRole", _AlertRole.default], ["AnnotationRole", _AnnotationRole.default], ["ApplicationRole", _ApplicationRole.default], ["ArticleRole", _ArticleRole.default], ["AudioRole", _AudioRole.default], ["BannerRole", _BannerRole.default], ["BlockquoteRole", _BlockquoteRole.default], ["BusyIndicatorRole", _BusyIndicatorRole.default], ["ButtonRole", _ButtonRole.default], ["CanvasRole", _CanvasRole.default], ["CaptionRole", _CaptionRole.default], ["CellRole", _CellRole.default], ["CheckBoxRole", _CheckBoxRole.default], ["ColorWellRole", _ColorWellRole.default], ["ColumnHeaderRole", _ColumnHeaderRole.default], ["ColumnRole", _ColumnRole.default], ["ComboBoxRole", _ComboBoxRole.default], ["ComplementaryRole", _ComplementaryRole.default], ["ContentInfoRole", _ContentInfoRole.default], ["DateRole", _DateRole.default], ["DateTimeRole", _DateTimeRole.default], ["DefinitionRole", _DefinitionRole.default], ["DescriptionListDetailRole", _DescriptionListDetailRole.default], ["DescriptionListRole", _DescriptionListRole.default], ["DescriptionListTermRole", _DescriptionListTermRole.default], ["DetailsRole", _DetailsRole.default], ["DialogRole", _DialogRole.default], ["DirectoryRole", _DirectoryRole.default], ["DisclosureTriangleRole", _DisclosureTriangleRole.default], ["DivRole", _DivRole.default], ["DocumentRole", _DocumentRole.default], ["EmbeddedObjectRole", _EmbeddedObjectRole.default], ["FeedRole", _FeedRole.default], ["FigcaptionRole", _FigcaptionRole.default], ["FigureRole", _FigureRole.default], ["FooterRole", _FooterRole.default], ["FormRole", _FormRole.default], ["GridRole", _GridRole.default], ["GroupRole", _GroupRole.default], ["HeadingRole", _HeadingRole.default], ["IframePresentationalRole", _IframePresentationalRole.default], ["IframeRole", _IframeRole.default], ["IgnoredRole", _IgnoredRole.default], ["ImageMapLinkRole", _ImageMapLinkRole.default], ["ImageMapRole", _ImageMapRole.default], ["ImageRole", _ImageRole.default], ["InlineTextBoxRole", _InlineTextBoxRole.default], ["InputTimeRole", _InputTimeRole.default], ["LabelRole", _LabelRole.default], ["LegendRole", _LegendRole.default], ["LineBreakRole", _LineBreakRole.default], ["LinkRole", _LinkRole.default], ["ListBoxOptionRole", _ListBoxOptionRole.default], ["ListBoxRole", _ListBoxRole.default], ["ListItemRole", _ListItemRole.default], ["ListMarkerRole", _ListMarkerRole.default], ["ListRole", _ListRole.default], ["LogRole", _LogRole.default], ["MainRole", _MainRole.default], ["MarkRole", _MarkRole.default], ["MarqueeRole", _MarqueeRole.default], ["MathRole", _MathRole.default], ["MenuBarRole", _MenuBarRole.default], ["MenuButtonRole", _MenuButtonRole.default], ["MenuItemRole", _MenuItemRole.default], ["MenuItemCheckBoxRole", _MenuItemCheckBoxRole.default], ["MenuItemRadioRole", _MenuItemRadioRole.default], ["MenuListOptionRole", _MenuListOptionRole.default], ["MenuListPopupRole", _MenuListPopupRole.default], ["MenuRole", _MenuRole.default], ["MeterRole", _MeterRole.default], ["NavigationRole", _NavigationRole.default], ["NoneRole", _NoneRole.default], ["NoteRole", _NoteRole.default], ["OutlineRole", _OutlineRole.default], ["ParagraphRole", _ParagraphRole.default], ["PopUpButtonRole", _PopUpButtonRole.default], ["PreRole", _PreRole.default], ["PresentationalRole", _PresentationalRole.default], ["ProgressIndicatorRole", _ProgressIndicatorRole.default], ["RadioButtonRole", _RadioButtonRole.default], ["RadioGroupRole", _RadioGroupRole.default], ["RegionRole", _RegionRole.default], ["RootWebAreaRole", _RootWebAreaRole.default], ["RowHeaderRole", _RowHeaderRole.default], ["RowRole", _RowRole.default], ["RubyRole", _RubyRole.default], ["RulerRole", _RulerRole.default], ["ScrollAreaRole", _ScrollAreaRole.default], ["ScrollBarRole", _ScrollBarRole.default], ["SeamlessWebAreaRole", _SeamlessWebAreaRole.default], ["SearchRole", _SearchRole.default], ["SearchBoxRole", _SearchBoxRole.default], ["SliderRole", _SliderRole.default], ["SliderThumbRole", _SliderThumbRole.default], ["SpinButtonRole", _SpinButtonRole.default], ["SpinButtonPartRole", _SpinButtonPartRole.default], ["SplitterRole", _SplitterRole.default], ["StaticTextRole", _StaticTextRole.default], ["StatusRole", _StatusRole.default], ["SVGRootRole", _SVGRootRole.default], ["SwitchRole", _SwitchRole.default], ["TabGroupRole", _TabGroupRole.default], ["TabRole", _TabRole.default], ["TableHeaderContainerRole", _TableHeaderContainerRole.default], ["TableRole", _TableRole.default], ["TabListRole", _TabListRole.default], ["TabPanelRole", _TabPanelRole.default], ["TermRole", _TermRole.default], ["TextFieldRole", _TextFieldRole.default], ["TimeRole", _TimeRole.default], ["TimerRole", _TimerRole.default], ["ToggleButtonRole", _ToggleButtonRole.default], ["ToolbarRole", _ToolbarRole.default], ["TreeRole", _TreeRole.default], ["TreeGridRole", _TreeGridRole.default], ["TreeItemRole", _TreeItemRole.default], ["UserInterfaceTooltipRole", _UserInterfaceTooltipRole.default], ["VideoRole", _VideoRole.default], ["WebAreaRole", _WebAreaRole.default], ["WindowRole", _WindowRole.default]];
+    var AXObjectsMap = {
+      entries: function entries() {
+        return AXObjects;
+      },
+      get: function get(key) {
+        var item = AXObjects.find(function(tuple) {
+          return tuple[0] === key ? true : false;
+        });
+        return item && item[1];
+      },
+      has: function has2(key) {
+        return !!this.get(key);
+      },
+      keys: function keys() {
+        return AXObjects.map(function(_ref) {
+          var _ref2 = _slicedToArray(_ref, 1), key = _ref2[0];
+          return key;
+        });
+      },
+      values: function values() {
+        return AXObjects.map(function(_ref3) {
+          var _ref4 = _slicedToArray(_ref3, 2), values2 = _ref4[1];
+          return values2;
+        });
+      }
+    };
+    var _default2 = AXObjectsMap;
+    exports.default = _default2;
+  });
+  unwrapExports(AXObjectsMap_1);
+  var AXObjectElementMap_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var _AXObjectsMap = _interopRequireDefault(AXObjectsMap_1);
+    function _interopRequireDefault(obj) {
+      return obj && obj.__esModule ? obj : { default: obj };
+    }
+    function _slicedToArray(arr, i) {
+      return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _unsupportedIterableToArray(arr, i) || _nonIterableRest();
+    }
+    function _nonIterableRest() {
+      throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+    }
+    function _iterableToArrayLimit(arr, i) {
+      var _i = arr == null ? null : typeof Symbol !== "undefined" && arr[Symbol.iterator] || arr["@@iterator"];
+      if (_i == null)
+        return;
+      var _arr = [];
+      var _n = true;
+      var _d = false;
+      var _s, _e;
+      try {
+        for (_i = _i.call(arr); !(_n = (_s = _i.next()).done); _n = true) {
+          _arr.push(_s.value);
+          if (i && _arr.length === i)
+            break;
+        }
+      } catch (err) {
+        _d = true;
+        _e = err;
+      } finally {
+        try {
+          if (!_n && _i["return"] != null)
+            _i["return"]();
+        } finally {
+          if (_d)
+            throw _e;
+        }
+      }
+      return _arr;
+    }
+    function _arrayWithHoles(arr) {
+      if (Array.isArray(arr))
+        return arr;
+    }
+    function _createForOfIteratorHelper(o, allowArrayLike) {
+      var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"];
+      if (!it) {
+        if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") {
+          if (it)
+            o = it;
+          var i = 0;
+          var F2 = function F3() {
+          };
+          return { s: F2, n: function n2() {
+            if (i >= o.length)
+              return { done: true };
+            return { done: false, value: o[i++] };
+          }, e: function e(_e2) {
+            throw _e2;
+          }, f: F2 };
+        }
+        throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+      }
+      var normalCompletion = true, didErr = false, err;
+      return { s: function s() {
+        it = it.call(o);
+      }, n: function n2() {
+        var step = it.next();
+        normalCompletion = step.done;
+        return step;
+      }, e: function e(_e3) {
+        didErr = true;
+        err = _e3;
+      }, f: function f() {
+        try {
+          if (!normalCompletion && it.return != null)
+            it.return();
+        } finally {
+          if (didErr)
+            throw err;
+        }
+      } };
+    }
+    function _unsupportedIterableToArray(o, minLen) {
+      if (!o)
+        return;
+      if (typeof o === "string")
+        return _arrayLikeToArray(o, minLen);
+      var n2 = Object.prototype.toString.call(o).slice(8, -1);
+      if (n2 === "Object" && o.constructor)
+        n2 = o.constructor.name;
+      if (n2 === "Map" || n2 === "Set")
+        return Array.from(o);
+      if (n2 === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n2))
+        return _arrayLikeToArray(o, minLen);
+    }
+    function _arrayLikeToArray(arr, len) {
+      if (len == null || len > arr.length)
+        len = arr.length;
+      for (var i = 0, arr2 = new Array(len); i < len; i++) {
+        arr2[i] = arr[i];
+      }
+      return arr2;
+    }
+    var AXObjectElements = [];
+    var _iterator = _createForOfIteratorHelper(_AXObjectsMap.default.entries()), _step;
+    try {
+      var _loop = function _loop2() {
+        var _step$value = _slicedToArray(_step.value, 2), name = _step$value[0], def = _step$value[1];
+        var relatedConcepts = def.relatedConcepts;
+        if (Array.isArray(relatedConcepts)) {
+          relatedConcepts.forEach(function(relation) {
+            if (relation.module === "HTML") {
+              var concept = relation.concept;
+              if (concept) {
+                var index = AXObjectElements.findIndex(function(_ref5) {
+                  var _ref6 = _slicedToArray(_ref5, 1), key = _ref6[0];
+                  return key === name;
+                });
+                if (index === -1) {
+                  AXObjectElements.push([name, []]);
+                  index = AXObjectElements.length - 1;
+                }
+                AXObjectElements[index][1].push(concept);
+              }
+            }
+          });
+        }
+      };
+      for (_iterator.s(); !(_step = _iterator.n()).done; ) {
+        _loop();
+      }
+    } catch (err) {
+      _iterator.e(err);
+    } finally {
+      _iterator.f();
+    }
+    var AXObjectElementMap = {
+      entries: function entries() {
+        return AXObjectElements;
+      },
+      get: function get(key) {
+        var item = AXObjectElements.find(function(tuple) {
+          return tuple[0] === key ? true : false;
+        });
+        return item && item[1];
+      },
+      has: function has2(key) {
+        return !!this.get(key);
+      },
+      keys: function keys() {
+        return AXObjectElements.map(function(_ref) {
+          var _ref2 = _slicedToArray(_ref, 1), key = _ref2[0];
+          return key;
+        });
+      },
+      values: function values() {
+        return AXObjectElements.map(function(_ref3) {
+          var _ref4 = _slicedToArray(_ref3, 2), values2 = _ref4[1];
+          return values2;
+        });
+      }
+    };
+    var _default2 = AXObjectElementMap;
+    exports.default = _default2;
+  });
+  unwrapExports(AXObjectElementMap_1);
+  var AXObjectRoleMap_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var _AXObjectsMap = _interopRequireDefault(AXObjectsMap_1);
+    function _interopRequireDefault(obj) {
+      return obj && obj.__esModule ? obj : { default: obj };
+    }
+    function _slicedToArray(arr, i) {
+      return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _unsupportedIterableToArray(arr, i) || _nonIterableRest();
+    }
+    function _nonIterableRest() {
+      throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+    }
+    function _iterableToArrayLimit(arr, i) {
+      var _i = arr == null ? null : typeof Symbol !== "undefined" && arr[Symbol.iterator] || arr["@@iterator"];
+      if (_i == null)
+        return;
+      var _arr = [];
+      var _n = true;
+      var _d = false;
+      var _s, _e;
+      try {
+        for (_i = _i.call(arr); !(_n = (_s = _i.next()).done); _n = true) {
+          _arr.push(_s.value);
+          if (i && _arr.length === i)
+            break;
+        }
+      } catch (err) {
+        _d = true;
+        _e = err;
+      } finally {
+        try {
+          if (!_n && _i["return"] != null)
+            _i["return"]();
+        } finally {
+          if (_d)
+            throw _e;
+        }
+      }
+      return _arr;
+    }
+    function _arrayWithHoles(arr) {
+      if (Array.isArray(arr))
+        return arr;
+    }
+    function _createForOfIteratorHelper(o, allowArrayLike) {
+      var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"];
+      if (!it) {
+        if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") {
+          if (it)
+            o = it;
+          var i = 0;
+          var F2 = function F3() {
+          };
+          return { s: F2, n: function n2() {
+            if (i >= o.length)
+              return { done: true };
+            return { done: false, value: o[i++] };
+          }, e: function e(_e2) {
+            throw _e2;
+          }, f: F2 };
+        }
+        throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+      }
+      var normalCompletion = true, didErr = false, err;
+      return { s: function s() {
+        it = it.call(o);
+      }, n: function n2() {
+        var step = it.next();
+        normalCompletion = step.done;
+        return step;
+      }, e: function e(_e3) {
+        didErr = true;
+        err = _e3;
+      }, f: function f() {
+        try {
+          if (!normalCompletion && it.return != null)
+            it.return();
+        } finally {
+          if (didErr)
+            throw err;
+        }
+      } };
+    }
+    function _unsupportedIterableToArray(o, minLen) {
+      if (!o)
+        return;
+      if (typeof o === "string")
+        return _arrayLikeToArray(o, minLen);
+      var n2 = Object.prototype.toString.call(o).slice(8, -1);
+      if (n2 === "Object" && o.constructor)
+        n2 = o.constructor.name;
+      if (n2 === "Map" || n2 === "Set")
+        return Array.from(o);
+      if (n2 === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n2))
+        return _arrayLikeToArray(o, minLen);
+    }
+    function _arrayLikeToArray(arr, len) {
+      if (len == null || len > arr.length)
+        len = arr.length;
+      for (var i = 0, arr2 = new Array(len); i < len; i++) {
+        arr2[i] = arr[i];
+      }
+      return arr2;
+    }
+    var AXObjectRoleElements = [];
+    var _iterator = _createForOfIteratorHelper(_AXObjectsMap.default.entries()), _step;
+    try {
+      var _loop = function _loop2() {
+        var _step$value = _slicedToArray(_step.value, 2), name = _step$value[0], def = _step$value[1];
+        var relatedConcepts = def.relatedConcepts;
+        if (Array.isArray(relatedConcepts)) {
+          relatedConcepts.forEach(function(relation) {
+            if (relation.module === "ARIA") {
+              var concept = relation.concept;
+              if (concept) {
+                var index = AXObjectRoleElements.findIndex(function(_ref5) {
+                  var _ref6 = _slicedToArray(_ref5, 1), key = _ref6[0];
+                  return key === name;
+                });
+                if (index === -1) {
+                  AXObjectRoleElements.push([name, []]);
+                  index = AXObjectRoleElements.length - 1;
+                }
+                AXObjectRoleElements[index][1].push(concept);
+              }
+            }
+          });
+        }
+      };
+      for (_iterator.s(); !(_step = _iterator.n()).done; ) {
+        _loop();
+      }
+    } catch (err) {
+      _iterator.e(err);
+    } finally {
+      _iterator.f();
+    }
+    var AXObjectRoleMap = {
+      entries: function entries() {
+        return AXObjectRoleElements;
+      },
+      get: function get(key) {
+        var item = AXObjectRoleElements.find(function(tuple) {
+          return tuple[0] === key ? true : false;
+        });
+        return item && item[1];
+      },
+      has: function has2(key) {
+        return !!this.get(key);
+      },
+      keys: function keys() {
+        return AXObjectRoleElements.map(function(_ref) {
+          var _ref2 = _slicedToArray(_ref, 1), key = _ref2[0];
+          return key;
+        });
+      },
+      values: function values() {
+        return AXObjectRoleElements.map(function(_ref3) {
+          var _ref4 = _slicedToArray(_ref3, 2), values2 = _ref4[1];
+          return values2;
+        });
+      }
+    };
+    var _default2 = AXObjectRoleMap;
+    exports.default = _default2;
+  });
+  unwrapExports(AXObjectRoleMap_1);
+  var elementAXObjectMap_1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.default = void 0;
+    var _AXObjectsMap = _interopRequireDefault(AXObjectsMap_1);
+    function _interopRequireDefault(obj) {
+      return obj && obj.__esModule ? obj : { default: obj };
+    }
+    function _slicedToArray(arr, i) {
+      return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _unsupportedIterableToArray(arr, i) || _nonIterableRest();
+    }
+    function _nonIterableRest() {
+      throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+    }
+    function _iterableToArrayLimit(arr, i) {
+      var _i = arr == null ? null : typeof Symbol !== "undefined" && arr[Symbol.iterator] || arr["@@iterator"];
+      if (_i == null)
+        return;
+      var _arr = [];
+      var _n = true;
+      var _d = false;
+      var _s, _e;
+      try {
+        for (_i = _i.call(arr); !(_n = (_s = _i.next()).done); _n = true) {
+          _arr.push(_s.value);
+          if (i && _arr.length === i)
+            break;
+        }
+      } catch (err) {
+        _d = true;
+        _e = err;
+      } finally {
+        try {
+          if (!_n && _i["return"] != null)
+            _i["return"]();
+        } finally {
+          if (_d)
+            throw _e;
+        }
+      }
+      return _arr;
+    }
+    function _arrayWithHoles(arr) {
+      if (Array.isArray(arr))
+        return arr;
+    }
+    function _createForOfIteratorHelper(o, allowArrayLike) {
+      var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"];
+      if (!it) {
+        if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") {
+          if (it)
+            o = it;
+          var i = 0;
+          var F2 = function F3() {
+          };
+          return { s: F2, n: function n2() {
+            if (i >= o.length)
+              return { done: true };
+            return { done: false, value: o[i++] };
+          }, e: function e(_e2) {
+            throw _e2;
+          }, f: F2 };
+        }
+        throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+      }
+      var normalCompletion = true, didErr = false, err;
+      return { s: function s() {
+        it = it.call(o);
+      }, n: function n2() {
+        var step = it.next();
+        normalCompletion = step.done;
+        return step;
+      }, e: function e(_e3) {
+        didErr = true;
+        err = _e3;
+      }, f: function f() {
+        try {
+          if (!normalCompletion && it.return != null)
+            it.return();
+        } finally {
+          if (didErr)
+            throw err;
+        }
+      } };
+    }
+    function _unsupportedIterableToArray(o, minLen) {
+      if (!o)
+        return;
+      if (typeof o === "string")
+        return _arrayLikeToArray(o, minLen);
+      var n2 = Object.prototype.toString.call(o).slice(8, -1);
+      if (n2 === "Object" && o.constructor)
+        n2 = o.constructor.name;
+      if (n2 === "Map" || n2 === "Set")
+        return Array.from(o);
+      if (n2 === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n2))
+        return _arrayLikeToArray(o, minLen);
+    }
+    function _arrayLikeToArray(arr, len) {
+      if (len == null || len > arr.length)
+        len = arr.length;
+      for (var i = 0, arr2 = new Array(len); i < len; i++) {
+        arr2[i] = arr[i];
+      }
+      return arr2;
+    }
+    var elementAXObjects = [];
+    var _iterator = _createForOfIteratorHelper(_AXObjectsMap.default.entries()), _step;
+    try {
+      var _loop = function _loop2() {
+        var _step$value = _slicedToArray(_step.value, 2), name = _step$value[0], def = _step$value[1];
+        var relatedConcepts = def.relatedConcepts;
+        if (Array.isArray(relatedConcepts)) {
+          relatedConcepts.forEach(function(relation) {
+            if (relation.module === "HTML") {
+              var concept = relation.concept;
+              if (concept) {
+                var conceptStr = JSON.stringify(concept);
+                var axObjects;
+                var index = 0;
+                for (; index < elementAXObjects.length; index++) {
+                  var _key = elementAXObjects[index][0];
+                  if (JSON.stringify(_key) === conceptStr) {
+                    axObjects = elementAXObjects[index][1];
+                    break;
+                  }
+                }
+                if (!axObjects) {
+                  axObjects = [];
+                }
+                var loc = axObjects.findIndex(function(item) {
+                  return item === name;
+                });
+                if (loc === -1) {
+                  axObjects.push(name);
+                }
+                if (index < elementAXObjects.length) {
+                  elementAXObjects.splice(index, 1, [concept, axObjects]);
+                } else {
+                  elementAXObjects.push([concept, axObjects]);
+                }
+              }
+            }
+          });
+        }
+      };
+      for (_iterator.s(); !(_step = _iterator.n()).done; ) {
+        _loop();
+      }
+    } catch (err) {
+      _iterator.e(err);
+    } finally {
+      _iterator.f();
+    }
+    var elementAXObjectMap = {
+      entries: function entries() {
+        return elementAXObjects;
+      },
+      get: function get(key) {
+        var item = elementAXObjects.find(function(tuple) {
+          return tuple[0] === key ? true : false;
+        });
+        return item && item[1];
+      },
+      has: function has2(key) {
+        return !!this.get(key);
+      },
+      keys: function keys() {
+        return elementAXObjects.map(function(_ref) {
+          var _ref2 = _slicedToArray(_ref, 1), key = _ref2[0];
+          return key;
+        });
+      },
+      values: function values() {
+        return elementAXObjects.map(function(_ref3) {
+          var _ref4 = _slicedToArray(_ref3, 2), values2 = _ref4[1];
+          return values2;
+        });
+      }
+    };
+    var _default2 = elementAXObjectMap;
+    exports.default = _default2;
+  });
+  unwrapExports(elementAXObjectMap_1);
+  var lib$1 = createCommonjsModule(function(module, exports) {
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+    exports.elementAXObjects = exports.AXObjects = exports.AXObjectRoles = exports.AXObjectElements = void 0;
+    var _AXObjectElementMap = _interopRequireDefault(AXObjectElementMap_1);
+    var _AXObjectRoleMap = _interopRequireDefault(AXObjectRoleMap_1);
+    var _AXObjectsMap = _interopRequireDefault(AXObjectsMap_1);
+    var _elementAXObjectMap = _interopRequireDefault(elementAXObjectMap_1);
+    function _interopRequireDefault(obj) {
+      return obj && obj.__esModule ? obj : { default: obj };
+    }
+    var AXObjectElements = _AXObjectElementMap.default;
+    exports.AXObjectElements = AXObjectElements;
+    var AXObjectRoles = _AXObjectRoleMap.default;
+    exports.AXObjectRoles = AXObjectRoles;
+    var AXObjects = _AXObjectsMap.default;
+    exports.AXObjects = AXObjects;
+    var elementAXObjects = _elementAXObjectMap.default;
+    exports.elementAXObjects = elementAXObjects;
+  });
+  unwrapExports(lib$1);
+  var lib_1$1 = lib$1.elementAXObjects;
+  var lib_2$1 = lib$1.AXObjects;
+  var lib_3$1 = lib$1.AXObjectRoles;
+  var lib_4$1 = lib$1.AXObjectElements;
+  var roles = [...lib_3.keys()];
+  var non_interactive_roles = new Set(roles.filter((name) => {
+    const role = lib_3.get(name);
+    return !lib_3.get(name).abstract && name !== "toolbar" && !role.superClass.some((classes) => classes.includes("widget"));
+  }).concat(
+    "progressbar"
+  ));
+  var interactive_roles = new Set(roles.filter((name) => {
+    const role = lib_3.get(name);
+    return !role.abstract && name !== "progressbar" && role.superClass.some((classes) => classes.includes("widget"));
+  }).concat(
+    "toolbar"
+  ));
+  function is_non_interactive_roles(role) {
+    return non_interactive_roles.has(role);
+  }
+  function is_interactive_roles(role) {
+    return interactive_roles.has(role);
+  }
+  var presentation_roles = /* @__PURE__ */ new Set(["presentation", "none"]);
+  function is_presentation_role(role) {
+    return presentation_roles.has(role);
+  }
+  function is_hidden_from_screen_reader(tag_name, attribute_map) {
+    var _a;
+    if (tag_name === "input") {
+      const type = (_a = attribute_map.get("type")) === null || _a === void 0 ? void 0 : _a.get_static_value();
+      if (type && type === "hidden") {
+        return true;
+      }
+    }
+    const aria_hidden = attribute_map.get("aria-hidden");
+    if (!aria_hidden)
+      return false;
+    if (!aria_hidden.is_static)
+      return true;
+    const aria_hidden_value = aria_hidden.get_static_value();
+    return aria_hidden_value === true || aria_hidden_value === "true";
+  }
+  var non_interactive_element_role_schemas = [];
+  lib_2.entries().forEach(([schema, roles2]) => {
+    if ([...roles2].every((role) => non_interactive_roles.has(role))) {
+      non_interactive_element_role_schemas.push(schema);
+    }
+  });
+  var interactive_element_role_schemas = [];
+  lib_2.entries().forEach(([schema, roles2]) => {
+    if ([...roles2].every((role) => interactive_roles.has(role))) {
+      interactive_element_role_schemas.push(schema);
+    }
+  });
+  var interactive_ax_objects = new Set([...lib_2$1.keys()].filter((name) => lib_2$1.get(name).type === "widget"));
+  var interactive_element_ax_object_schemas = [];
+  lib_1$1.entries().forEach(([schema, ax_object]) => {
+    if ([...ax_object].every((role) => interactive_ax_objects.has(role))) {
+      interactive_element_ax_object_schemas.push(schema);
+    }
+  });
+  function match_schema(schema, tag_name, attribute_map) {
+    if (schema.name !== tag_name)
+      return false;
+    if (!schema.attributes)
+      return true;
+    return schema.attributes.every((schema_attribute) => {
+      const attribute = attribute_map.get(schema_attribute.name);
+      if (!attribute)
+        return false;
+      if (schema_attribute.value && schema_attribute.value !== attribute.get_static_value()) {
+        return false;
+      }
+      return true;
+    });
+  }
+  function is_interactive_element(tag_name, attribute_map) {
+    if (interactive_element_role_schemas.some((schema) => match_schema(schema, tag_name, attribute_map))) {
+      return true;
+    }
+    if (non_interactive_element_role_schemas.some((schema) => match_schema(schema, tag_name, attribute_map))) {
+      return false;
+    }
+    if (interactive_element_ax_object_schemas.some((schema) => match_schema(schema, tag_name, attribute_map))) {
+      return true;
+    }
+    return false;
+  }
+  function is_semantic_role_element(role, tag_name, attribute_map) {
+    for (const [schema, ax_object] of lib_1$1.entries()) {
+      if (schema.name === tag_name && (!schema.attributes || schema.attributes.every((attr) => attribute_map.has(attr.name) && attribute_map.get(attr.name).get_static_value() === attr.value))) {
+        for (const name of ax_object) {
+          const roles2 = lib_3$1.get(name);
+          if (roles2) {
+            for (const { name: name2 } of roles2) {
+              if (name2 === role) {
+                return true;
+              }
+            }
+          }
+        }
+      }
+    }
+    return false;
+  }
   var aria_attributes = "activedescendant atomic autocomplete busy checked colcount colindex colspan controls current describedby description details disabled dropeffect errormessage expanded flowto grabbed haspopup hidden invalid keyshortcuts label labelledby level live modal multiline multiselectable orientation owns placeholder posinset pressed readonly relevant required roledescription rowcount rowindex rowspan selected setsize sort valuemax valuemin valuenow valuetext".split(" ");
   var aria_attribute_set = new Set(aria_attributes);
-  var aria_roles = "alert alertdialog application article banner blockquote button caption cell checkbox code columnheader combobox complementary contentinfo definition deletion dialog directory document emphasis feed figure form generic graphics-document graphics-object graphics-symbol grid gridcell group heading img link list listbox listitem log main marquee math meter menu menubar menuitem menuitemcheckbox menuitemradio navigation none note option paragraph presentation progressbar radio radiogroup region row rowgroup rowheader scrollbar search searchbox separator slider spinbutton status strong subscript superscript switch tab table tablist tabpanel term textbox time timer toolbar tooltip tree treegrid treeitem".split(" ");
+  var aria_roles = lib_3.keys();
   var aria_role_set = new Set(aria_roles);
+  var aria_role_abstract_set = new Set(lib_3.keys().filter((role) => lib_3.get(role).abstract));
   var a11y_required_attributes = {
     a: ["href"],
     area: ["alt", "aria-label", "aria-labelledby"],
@@ -16715,7 +25950,7 @@ ${this.frame}`;
     ["ul", "list"]
   ]);
   var invisible_elements = /* @__PURE__ */ new Set(["meta", "html", "script", "style"]);
-  var valid_modifiers = /* @__PURE__ */ new Set([
+  var valid_modifiers$1 = /* @__PURE__ */ new Set([
     "preventDefault",
     "stopPropagation",
     "capture",
@@ -16755,16 +25990,41 @@ ${this.frame}`;
   function get_namespace(parent, element, explicit_namespace) {
     const parent_element = parent.find_nearest(/^Element/);
     if (!parent_element) {
-      return explicit_namespace || (svg$1.test(element.name) ? namespaces.svg : null);
+      return explicit_namespace || (is_svg(element.name) ? namespaces.svg : null);
     }
     if (parent_element.namespace !== namespaces.foreign) {
-      if (svg$1.test(element.name.toLowerCase()))
+      if (is_svg(element.name.toLowerCase()))
         return namespaces.svg;
       if (parent_element.name.toLowerCase() === "foreignobject")
         return null;
     }
     return parent_element.namespace;
   }
+  function is_valid_aria_attribute_value(schema, value2) {
+    switch (schema.type) {
+      case "boolean":
+        return typeof value2 === "boolean";
+      case "string":
+      case "id":
+        return typeof value2 === "string";
+      case "tristate":
+        return typeof value2 === "boolean" || value2 === "mixed";
+      case "integer":
+      case "number":
+        return typeof value2 !== "boolean" && isNaN(Number(value2)) === false;
+      case "token":
+        return (schema.values || []).indexOf(typeof value2 === "string" ? value2.toLowerCase() : value2) > -1;
+      case "idlist":
+        return typeof value2 === "string" && value2.split(" ").every((id2) => typeof id2 === "string");
+      case "tokenlist":
+        return typeof value2 === "string" && value2.split(" ").every((token) => (schema.values || []).indexOf(token.toLowerCase()) > -1);
+      default:
+        return false;
+    }
+  }
+  var regex_any_repeated_whitespaces = /[\s]+/g;
+  var regex_heading_tags = /^h[1-6]$/;
+  var regex_illegal_attribute_character = /(^[0-9-.])|[\^$@%&#?!|()[\]{}^*+~;]/;
   var Element = class extends Node$1 {
     constructor(component, parent, scope2, info) {
       super(component, parent, scope2, info);
@@ -16793,7 +26053,7 @@ ${this.frame}`;
         if (this.name === "pre" || this.name === "textarea") {
           const first = info.children[0];
           if (first && first.type === "Text") {
-            first.data = first.data.replace(start_newline, "");
+            first.data = first.data.replace(regex_starts_with_newline, "");
           }
         }
         if (this.name === "textarea") {
@@ -16886,7 +26146,7 @@ ${this.frame}`;
       return this.name === "svelte:element";
     }
     validate() {
-      if (this.component.var_lookup.has(this.name) && this.component.var_lookup.get(this.name).imported) {
+      if (this.component.var_lookup.has(this.name) && this.component.var_lookup.get(this.name).imported && !is_svg(this.name) && !is_html(this.name)) {
         this.component.warn(this, compiler_warnings.component_name_lowercase(this.name));
       }
       this.validate_attributes();
@@ -16906,7 +26166,7 @@ ${this.frame}`;
         if (attribute.is_spread)
           return;
         const name = attribute.name.toLowerCase();
-        if (/(^[0-9-.])|[\^$@%&#?!|()[\]{}^*+~;]/.test(name)) {
+        if (regex_illegal_attribute_character.test(name)) {
           return component.error(attribute, compiler_errors.illegal_attribute(name));
         }
         if (name === "slot") {
@@ -16931,8 +26191,13 @@ ${this.frame}`;
       });
     }
     validate_attributes_a11y() {
-      const { component } = this;
-      this.attributes.forEach((attribute) => {
+      var _a;
+      const { component, attributes, handlers: handlers2 } = this;
+      const attribute_map = /* @__PURE__ */ new Map();
+      const handlers_map = /* @__PURE__ */ new Map();
+      attributes.forEach((attribute) => attribute_map.set(attribute.name, attribute));
+      handlers2.forEach((handler) => handlers_map.set(handler.name, handler));
+      attributes.forEach((attribute) => {
         if (attribute.is_spread)
           return;
         const name = attribute.name.toLowerCase();
@@ -16945,8 +26210,19 @@ ${this.frame}`;
             const match = fuzzymatch(type, aria_attributes);
             component.warn(attribute, compiler_warnings.a11y_unknown_aria_attribute(type, match));
           }
-          if (name === "aria-hidden" && /^h[1-6]$/.test(this.name)) {
+          if (name === "aria-hidden" && regex_heading_tags.test(this.name)) {
             component.warn(attribute, compiler_warnings.a11y_hidden(this.name));
+          }
+          let value2 = attribute.get_static_value();
+          if (value2 === "true")
+            value2 = true;
+          if (value2 === "false")
+            value2 = false;
+          if (value2 !== null && value2 !== void 0 && lib_5.has(name)) {
+            const schema = lib_5.get(name);
+            if (!is_valid_aria_attribute_value(schema, value2)) {
+              component.warn(attribute, compiler_warnings.a11y_incorrect_attribute_type(schema, name));
+            }
           }
         }
         if (name === "role") {
@@ -16954,7 +26230,9 @@ ${this.frame}`;
             component.warn(attribute, compiler_warnings.a11y_misplaced_role(this.name));
           }
           const value2 = attribute.get_static_value();
-          if (value2 && !aria_role_set.has(value2)) {
+          if (value2 && aria_role_abstract_set.has(value2)) {
+            component.warn(attribute, compiler_warnings.a11y_no_abstract_role(value2));
+          } else if (value2 && !aria_role_set.has(value2)) {
             const match = fuzzymatch(value2, aria_roles);
             component.warn(attribute, compiler_warnings.a11y_unknown_role(value2, match));
           }
@@ -16968,6 +26246,19 @@ ${this.frame}`;
             if (has_nested_redundant_role) {
               component.warn(attribute, compiler_warnings.a11y_no_redundant_roles(value2));
             }
+          }
+          if (!is_semantic_role_element(value2, this.name, attribute_map)) {
+            const role = lib_3.get(value2);
+            if (role) {
+              const required_role_props = Object.keys(role.requiredProps);
+              const has_missing_props = required_role_props.some((prop) => !attributes.find((a) => a.name === prop));
+              if (has_missing_props) {
+                component.warn(attribute, compiler_warnings.a11y_role_has_required_aria_props(value2, required_role_props));
+              }
+            }
+          }
+          if (is_interactive_element(this.name, attribute_map) && (is_non_interactive_roles(value2) || is_presentation_role(value2))) {
+            component.warn(this, compiler_warnings.a11y_no_interactive_element_to_noninteractive_role(value2, this.name));
           }
         }
         if (name === "accesskey") {
@@ -16986,6 +26277,22 @@ ${this.frame}`;
           }
         }
       });
+      if (handlers_map.has("click")) {
+        const role = attribute_map.get("role");
+        const is_non_presentation_role = (role === null || role === void 0 ? void 0 : role.is_static) && !is_presentation_role(role.get_static_value());
+        if (!is_hidden_from_screen_reader(this.name, attribute_map) && (!role || is_non_presentation_role) && !is_interactive_element(this.name, attribute_map) && !this.attributes.find((attr) => attr.is_spread)) {
+          const has_key_event = handlers_map.has("keydown") || handlers_map.has("keyup") || handlers_map.has("keypress");
+          if (!has_key_event) {
+            component.warn(this, compiler_warnings.a11y_click_events_have_key_events());
+          }
+        }
+      }
+      if (!is_interactive_element(this.name, attribute_map) && !is_interactive_roles((_a = attribute_map.get("role")) === null || _a === void 0 ? void 0 : _a.get_static_value())) {
+        const tab_index = attribute_map.get("tabindex");
+        if (tab_index && (!tab_index.is_static || Number(tab_index.get_static_value()) >= 0)) {
+          component.warn(this, compiler_warnings.a11y_no_noninteractive_tabindex);
+        }
+      }
     }
     validate_special_cases() {
       const { component, attributes, handlers: handlers2 } = this;
@@ -16997,6 +26304,23 @@ ${this.frame}`;
         const href_attribute = attribute_map.get("href") || attribute_map.get("xlink:href");
         const id_attribute = attribute_map.get("id");
         const name_attribute = attribute_map.get("name");
+        const target_attribute = attribute_map.get("target");
+        if (target_attribute && target_attribute.get_static_value() === "_blank" && href_attribute) {
+          const href_static_value = href_attribute.get_static_value() ? href_attribute.get_static_value().toLowerCase() : null;
+          if (href_static_value === null || href_static_value.match(/^(https?:)?\/\//i)) {
+            const rel = attribute_map.get("rel");
+            const rel_values = rel ? rel.get_static_value().split(" ") : [];
+            const expected_values = ["noreferrer"];
+            expected_values.forEach((expected_value) => {
+              if (!rel || rel && rel_values.indexOf(expected_value) < 0) {
+                component.warn(this, {
+                  code: `security-anchor-rel-${expected_value}`,
+                  message: `Security: Anchor with "target=_blank" should have rel attribute containing the value "${expected_value}"`
+                });
+              }
+            });
+          }
+        }
         if (href_attribute) {
           const href_value = href_attribute.get_static_value();
           if (href_value === "" || href_value === "#" || /^\W*javascript:/i.test(href_value)) {
@@ -17040,8 +26364,21 @@ ${this.frame}`;
         }
       }
       if (this.name === "label") {
-        const has_input_child = this.children.some((i) => i instanceof Element && a11y_labelable.has(i.name));
-        if (!attribute_map.has("for") && !has_input_child) {
+        const has_input_child = (children) => {
+          if (children.some((child) => child instanceof Element && (a11y_labelable.has(child.name) || child.name === "slot"))) {
+            return true;
+          }
+          for (const child of children) {
+            if (!("children" in child) || child.children.length === 0) {
+              continue;
+            }
+            if (has_input_child(child.children)) {
+              return true;
+            }
+          }
+          return false;
+        };
+        if (!attribute_map.has("for") && !has_input_child(this.children)) {
           component.warn(this, compiler_warnings.a11y_label_has_associated_control);
         }
       }
@@ -17083,7 +26420,7 @@ ${this.frame}`;
           if (node2.type === "Comment")
             return false;
           if (node2.type === "Text")
-            return /\S/.test(node2.data);
+            return regex_non_whitespace_character.test(node2.data);
           return true;
         });
         const index = children.findIndex((child) => child.name === "figcaption");
@@ -17170,10 +26507,10 @@ ${this.frame}`;
           if (this.name !== "video") {
             return component.error(binding, compiler_errors.invalid_binding_element_with("<video>", name));
           }
-        } else if (dimensions.test(name)) {
+        } else if (regex_dimensions.test(name)) {
           if (this.name === "svg" && (name === "offsetWidth" || name === "offsetHeight")) {
             return component.error(binding, compiler_errors.invalid_binding_on(binding.name, `<svg>. Use '${name.replace("offset", "client")}' instead`));
-          } else if (svg$1.test(this.name)) {
+          } else if (is_svg(this.name)) {
             return component.error(binding, compiler_errors.invalid_binding_on(binding.name, "SVG elements"));
           } else if (is_void(this.name)) {
             return component.error(binding, compiler_errors.invalid_binding_on(binding.name, `void elements like <${this.name}>. Use a wrapper element instead`));
@@ -17209,8 +26546,8 @@ ${this.frame}`;
           return component.error(handler, compiler_errors.invalid_event_modifier_combination("passive", "nonpassive"));
         }
         handler.modifiers.forEach((modifier) => {
-          if (!valid_modifiers.has(modifier)) {
-            return component.error(handler, compiler_errors.invalid_event_modifier(list$1(Array.from(valid_modifiers))));
+          if (!valid_modifiers$1.has(modifier)) {
+            return component.error(handler, compiler_errors.invalid_event_modifier(list$1(Array.from(valid_modifiers$1))));
           }
           if (modifier === "passive") {
             if (passive_events.has(handler.name)) {
@@ -17267,7 +26604,7 @@ ${this.frame}`;
         if (attribute && !attribute.is_true) {
           attribute.chunks.forEach((chunk, index) => {
             if (chunk.type === "Text") {
-              let data2 = chunk.data.replace(/[\s\n\t]+/g, " ");
+              let data2 = chunk.data.replace(regex_any_repeated_whitespaces, " ");
               if (index === 0) {
                 data2 = data2.trimLeft();
               } else if (index === attribute.chunks.length - 1) {
@@ -17280,23 +26617,26 @@ ${this.frame}`;
       });
     }
   };
+  var regex_starts_with_vovel = /^[aeiou]/;
   function should_have_attribute(node2, attributes, name = node2.name) {
-    const article = /^[aeiou]/.test(attributes[0]) ? "an" : "a";
+    const article = regex_starts_with_vovel.test(attributes[0]) ? "an" : "a";
     const sequence2 = attributes.length > 1 ? attributes.slice(0, -1).join(", ") + ` or ${attributes[attributes.length - 1]}` : attributes[0];
     node2.component.warn(node2, compiler_warnings.a11y_missing_attribute(name, article, sequence2));
   }
+  var regex_minus_sign = /-/;
   function within_custom_element(parent) {
     while (parent) {
       if (parent.type === "InlineComponent")
         return false;
-      if (parent.type === "Element" && /-/.test(parent.name))
+      if (parent.type === "Element" && regex_minus_sign.test(parent.name))
         return true;
       parent = parent.parent;
     }
     return false;
   }
+  var regex_return_characters = /\r/g;
   function hash(str) {
-    str = str.replace(/\r/g, "");
+    str = str.replace(regex_return_characters, "");
     let hash2 = 5381;
     let i = str.length;
     while (i--)
@@ -17311,7 +26651,7 @@ ${this.frame}`;
         return;
       }
       this.children = map_children(component, parent, scope2, info.children.filter((child) => {
-        return child.type !== "Text" || /\S/.test(child.data);
+        return child.type !== "Text" || regex_non_whitespace_character.test(child.data);
       }));
       if (this.children.length > 0) {
         this.id = `svelte-${hash(this.component.source.slice(this.start, this.end))}`;
@@ -17342,6 +26682,7 @@ ${this.frame}`;
         component.add_reference(this, name);
       }
       this.name = info.name;
+      this.namespace = get_namespace$1(parent, component.namespace);
       this.expression = this.name === "svelte:component" ? new Expression(component, this, scope2, info.expression) : null;
       info.attributes.forEach((node2) => {
         switch (node2.type) {
@@ -17444,7 +26785,14 @@ ${this.frame}`;
     }
   };
   function not_whitespace_text(node2) {
-    return !(node2.type === "Text" && /^\s+$/.test(node2.data));
+    return !(node2.type === "Text" && regex_only_whitespaces.test(node2.data));
+  }
+  function get_namespace$1(parent, explicit_namespace) {
+    const parent_element = parent.find_nearest(/^Element/);
+    if (!parent_element) {
+      return explicit_namespace;
+    }
+    return parent_element.namespace;
   }
   var KeyBlock = class extends AbstractBlock {
     constructor(component, parent, scope2, info) {
@@ -18058,6 +27406,7 @@ ${this.frame}`;
   function add_actions(block, target, actions) {
     actions.forEach((action) => add_action(block, target, action));
   }
+  var regex_invalid_variable_identifier_characters = /[^a-zA-Z0-9_$]/g;
   function add_action(block, target, action) {
     const { expression: expression2, template_scope } = action;
     let snippet;
@@ -18066,7 +27415,7 @@ ${this.frame}`;
       snippet = expression2.manipulate(block);
       dependencies = expression2.dynamic_dependencies();
     }
-    const id2 = block.get_unique_name(`${action.name.replace(/[^a-zA-Z0-9_$]/g, "_")}_action`);
+    const id2 = block.get_unique_name(`${action.name.replace(regex_invalid_variable_identifier_characters, "_")}_action`);
     block.add_variable(id2);
     const [obj, ...properties2] = action.name.split(".");
     const fn = is_contextual(action.component, template_scope, obj) ? block.renderer.reference(obj) : obj;
@@ -18560,6 +27909,7 @@ ${this.frame}`;
       block.chunks.destroy.push(b`@destroy_each(${iterations}, detaching);`);
     }
   };
+  var regex_non_whitespace_characters$1 = /[\S\u00A0]/;
   var TextWrapper = class extends Wrapper {
     constructor(renderer, block, parent, node2, data2) {
       super(renderer, block, parent, node2);
@@ -18570,7 +27920,7 @@ ${this.frame}`;
     use_space() {
       if (this.renderer.component.component_options.preserveWhitespace)
         return false;
-      if (/[\S\u00A0]/.test(this.data))
+      if (regex_non_whitespace_characters$1.test(this.data))
         return false;
       return !this.node.within_pre();
     }
@@ -18607,6 +27957,34 @@ ${this.frame}`;
       });
     }
   }
+  var boolean_attributes = /* @__PURE__ */ new Set([
+    "allowfullscreen",
+    "allowpaymentrequest",
+    "async",
+    "autofocus",
+    "autoplay",
+    "checked",
+    "controls",
+    "default",
+    "defer",
+    "disabled",
+    "formnovalidate",
+    "hidden",
+    "inert",
+    "ismap",
+    "itemscope",
+    "loop",
+    "multiple",
+    "muted",
+    "nomodule",
+    "novalidate",
+    "open",
+    "playsinline",
+    "readonly",
+    "required",
+    "reversed",
+    "selected"
+  ]);
   var non_textlike_input_types = /* @__PURE__ */ new Set([
     "button",
     "checkbox",
@@ -18634,6 +28012,8 @@ ${this.frame}`;
     render(_block) {
     }
   };
+  var regex_minus_sign$1 = /-/;
+  var regex_invalid_variable_identifier_characters$1 = /[^a-zA-Z_$]/g;
   var AttributeWrapper = class extends BaseAttributeWrapper {
     constructor(parent, block, node2) {
       super(parent, block, node2);
@@ -18676,7 +28056,7 @@ ${this.frame}`;
     render(block) {
       const element = this.parent;
       const { name, property_name, should_cache: should_cache2, is_indirectly_bound_value: is_indirectly_bound_value2 } = this;
-      const method = /-/.test(element.node.name) ? "@set_custom_element_data" : name.slice(0, 6) === "xlink:" ? "@xlink_attr" : "@attr";
+      const method = regex_minus_sign$1.test(element.node.name) ? "@set_custom_element_data" : name.slice(0, 6) === "xlink:" ? "@xlink_attr" : "@attr";
       const is_legacy_input_type = element.renderer.component.compile_options.legacy && name === "type" && this.parent.node.name === "input";
       const dependencies = this.get_dependencies();
       const value2 = this.get_value(block);
@@ -18728,7 +28108,7 @@ ${this.frame}`;
       }
     }
     get_init(block, value2) {
-      this.last = this.should_cache && block.get_unique_name(`${this.parent.var.name}_${this.name.replace(/[^a-zA-Z_$]/g, "_")}_value`);
+      this.last = this.should_cache && block.get_unique_name(`${this.parent.var.name}_${this.name.replace(regex_invalid_variable_identifier_characters$1, "_")}_value`);
       if (this.should_cache)
         block.add_variable(this.last);
       return this.should_cache ? x`${this.last} = ${value2}` : value2;
@@ -18775,7 +28155,7 @@ ${this.frame}`;
     }
     get_value(block) {
       if (this.node.is_true) {
-        if (this.metadata && boolean_attribute.has(this.metadata.property_name.toLowerCase())) {
+        if (this.metadata && boolean_attributes.has(this.metadata.property_name.toLowerCase())) {
           return x`true`;
         }
         return x`""`;
@@ -18814,7 +28194,7 @@ ${this.frame}`;
       if (value2.length === 0)
         return '=""';
       return `="${value2.map((chunk) => {
-        return chunk.type === "Text" ? chunk.data.replace(/"/g, '\\"') : `\${${chunk.manipulate()}}`;
+        return chunk.type === "Text" ? chunk.data.replace(regex_double_quotes, '\\"') : `\${${chunk.manipulate()}}`;
       }).join("")}"`;
     }
   };
@@ -18874,39 +28254,13 @@ ${this.frame}`;
     if (!metadata.property_name)
       metadata.property_name = name;
   });
-  var boolean_attribute = /* @__PURE__ */ new Set([
-    "allowfullscreen",
-    "allowpaymentrequest",
-    "async",
-    "autofocus",
-    "autoplay",
-    "checked",
-    "controls",
-    "default",
-    "defer",
-    "disabled",
-    "formnovalidate",
-    "hidden",
-    "ismap",
-    "itemscope",
-    "loop",
-    "multiple",
-    "muted",
-    "nomodule",
-    "novalidate",
-    "open",
-    "playsinline",
-    "readonly",
-    "required",
-    "reversed",
-    "selected"
-  ]);
   function should_cache(attribute) {
     return attribute.is_src || attribute.node.should_cache();
   }
+  var regex_contains_checked_or_group = /checked|group/;
   function is_indirectly_bound_value(attribute) {
     const element = attribute.parent;
-    return attribute.name === "value" && (element.node.name === "option" || element.node.name === "input" && element.node.bindings.some((binding) => /checked|group/.test(binding.name)));
+    return attribute.name === "value" && (element.node.name === "option" || element.node.name === "input" && element.node.bindings.some((binding) => regex_contains_checked_or_group.test(binding.name)));
   }
   var StyleAttributeWrapper = class extends AttributeWrapper {
     render(block) {
@@ -18943,6 +28297,7 @@ ${this.frame}`;
       });
     }
   };
+  var regex_style_prop_key = /^\s*([\w-]+):\s*/;
   function optimize_style(value2) {
     const props = [];
     let chunks = value2.slice();
@@ -18950,7 +28305,7 @@ ${this.frame}`;
       const chunk = chunks[0];
       if (chunk.type !== "Text")
         return null;
-      const key_match = /^\s*([\w-]+):\s*/.exec(chunk.data);
+      const key_match = regex_style_prop_key.exec(chunk.data);
       if (!key_match)
         return null;
       const key = key_match[1];
@@ -18972,6 +28327,8 @@ ${this.frame}`;
     }
     return props;
   }
+  var regex_important_flag = /\s*!important\s*$/;
+  var regex_semicolon_or_whitespace = /[;\s]/;
   function get_style_value(chunks) {
     const value2 = [];
     let in_url = false;
@@ -19010,7 +28367,7 @@ ${this.frame}`;
             data: chunk.data.slice(0, c2)
           });
         }
-        while (/[;\s]/.test(chunk.data[c2]))
+        while (regex_semicolon_or_whitespace.test(chunk.data[c2]))
           c2 += 1;
         const remaining_data = chunk.data.slice(c2);
         if (remaining_data) {
@@ -19028,9 +28385,9 @@ ${this.frame}`;
     }
     let important = false;
     const last_chunk = value2[value2.length - 1];
-    if (last_chunk && last_chunk.type === "Text" && /\s*!important\s*$/.test(last_chunk.data)) {
+    if (last_chunk && last_chunk.type === "Text" && regex_important_flag.test(last_chunk.data)) {
       important = true;
-      last_chunk.data = last_chunk.data.replace(/\s*!important\s*$/, "");
+      last_chunk.data = last_chunk.data.replace(regex_important_flag, "");
       if (!last_chunk.data)
         value2.pop();
     }
@@ -19503,10 +28860,10 @@ ${this.frame}`;
         const { init } = this.rename_this_method(block, (content) => x`${html_tag}.p(${content})`);
         const update_anchor = needs_anchor ? html_anchor : this.next ? this.next.var : "null";
         const parent_element = this.node.find_nearest(/^Element/);
-        const is_svg = parent_element && parent_element.namespace === namespaces.svg;
-        block.chunks.create.push(b`${html_tag} = new @HtmlTag(${is_svg ? "true" : "false"});`);
+        const is_svg2 = parent_element && parent_element.namespace === namespaces.svg;
+        block.chunks.create.push(b`${html_tag} = new @HtmlTag(${is_svg2 ? "true" : "false"});`);
         if (this.renderer.options.hydratable) {
-          block.chunks.claim.push(b`${html_tag} = @claim_html_tag(${_parent_nodes}, ${is_svg ? "true" : "false"});`);
+          block.chunks.claim.push(b`${html_tag} = @claim_html_tag(${_parent_nodes}, ${is_svg2 ? "true" : "false"});`);
         }
         block.chunks.hydrate.push(b`${html_tag}.a = ${update_anchor};`);
         block.chunks.mount.push(b`${html_tag}.m(${init}, ${parent_node || "#target"}, ${parent_node ? null : "#anchor"});`);
@@ -19519,10 +28876,12 @@ ${this.frame}`;
       }
     }
   };
+  var regex_contains_radio_or_checkbox_or_file = /radio|checkbox|file/;
+  var regex_contains_radio_or_checkbox_or_range_or_file = /radio|checkbox|range|file/;
   var events = [
     {
       event_names: ["input"],
-      filter: (node2, _name) => node2.name === "textarea" || node2.name === "input" && !/radio|checkbox|range|file/.test(node2.get_static_attribute_value("type"))
+      filter: (node2, _name) => node2.name === "textarea" || node2.name === "input" && !regex_contains_radio_or_checkbox_or_range_or_file.test(node2.get_static_attribute_value("type"))
     },
     {
       event_names: ["input"],
@@ -19530,7 +28889,7 @@ ${this.frame}`;
     },
     {
       event_names: ["change"],
-      filter: (node2, _name) => node2.name === "select" || node2.name === "input" && /radio|checkbox|file/.test(node2.get_static_attribute_value("type"))
+      filter: (node2, _name) => node2.name === "select" || node2.name === "input" && regex_contains_radio_or_checkbox_or_file.test(node2.get_static_attribute_value("type"))
     },
     {
       event_names: ["change", "input"],
@@ -19538,7 +28897,7 @@ ${this.frame}`;
     },
     {
       event_names: ["elementresize"],
-      filter: (_node, name) => dimensions.test(name)
+      filter: (_node, name) => regex_dimensions.test(name)
     },
     {
       event_names: ["timeupdate"],
@@ -19586,6 +28945,8 @@ ${this.frame}`;
     }
   ];
   var CHILD_DYNAMIC_ELEMENT_BLOCK = "child_dynamic_element";
+  var regex_invalid_variable_identifier_characters$2 = /[^a-zA-Z0-9_$]/g;
+  var regex_minus_signs = /-/g;
   var ElementWrapper = class extends Wrapper {
     constructor(renderer, block, parent, node2, strip_whitespace, next_sibling) {
       super(renderer, block, parent, node2);
@@ -19602,7 +28963,7 @@ ${this.frame}`;
       }
       this.var = {
         type: "Identifier",
-        name: node2.name.replace(/[^a-zA-Z0-9_$]/g, "_")
+        name: node2.name.replace(regex_invalid_variable_identifier_characters$2, "_")
       };
       this.void = is_void(node2.name);
       this.class_dependencies = [];
@@ -19831,8 +29192,9 @@ ${this.frame}`;
     }
     get_render_statement(block) {
       const { name, namespace, tag_expr } = this.node;
+      const reference = tag_expr.manipulate(block);
       if (namespace === namespaces.svg) {
-        return x`@svg_element("${name}")`;
+        return x`@svg_element(${reference})`;
       }
       if (namespace) {
         return x`@_document.createElementNS("${namespace}", "${name}")`;
@@ -19841,7 +29203,6 @@ ${this.frame}`;
       if (is) {
         return x`@element_is("${name}", ${is.render_chunks(block).reduce((lhs, rhs) => x`${lhs} + ${rhs}`)})`;
       }
-      const reference = tag_expr.manipulate(block);
       return x`@element(${reference})`;
     }
     get_claim_statement(block, nodes) {
@@ -20030,12 +29391,26 @@ ${this.frame}`;
 			}
 		`);
       const fn = this.node.namespace === namespaces.svg ? x`@set_svg_attributes` : x`@set_attributes`;
-      block.chunks.hydrate.push(b`${fn}(${this.var}, ${data2});`);
-      block.chunks.update.push(b`
-			${fn}(${this.var}, ${data2} = @get_spread_update(${levels}, [
-				${updates}
-			]));
-		`);
+      if (this.node.is_dynamic_element) {
+        const tag2 = this.node.tag_expr.manipulate(block);
+        const attr_update = this.node.namespace === namespaces.svg ? b`${fn}(${this.var}, ${data2});` : b`
+					if (/-/.test(${tag2})) {
+						@set_custom_element_data_map(${this.var}, ${data2});
+					} else {
+						${fn}(${this.var}, ${data2});
+					}`;
+        block.chunks.hydrate.push(attr_update);
+        block.chunks.update.push(b`
+				${data2} = @get_spread_update(${levels}, [${updates}]);
+				${attr_update}`);
+      } else {
+        block.chunks.hydrate.push(b`${fn}(${this.var}, ${data2});`);
+        block.chunks.update.push(b`
+				${fn}(${this.var}, ${data2} = @get_spread_update(${levels}, [
+					${updates}
+				]));
+			`);
+      }
       if (this.node.name === "select") {
         const dependencies = /* @__PURE__ */ new Set();
         for (const attr of this.attributes) {
@@ -20223,7 +29598,10 @@ ${this.frame}`;
           block.chunks.update.push(updater);
         } else if (dependencies && dependencies.size > 0 || this.class_dependencies.length) {
           const all_dependencies = this.class_dependencies.concat(...dependencies);
-          const condition = block.renderer.dirty(all_dependencies);
+          let condition = block.renderer.dirty(all_dependencies);
+          if (block.has_outros) {
+            condition = x`!#current || ${condition}`;
+          }
           const any_dynamic_dependencies = all_dependencies.some((dep) => {
             const variable = this.renderer.component.var_lookup.get(dep);
             return !variable || is_dynamic(variable);
@@ -20241,14 +29619,14 @@ ${this.frame}`;
     add_styles(block) {
       const has_spread = this.node.attributes.some((attr) => attr.is_spread);
       this.node.styles.forEach((style_directive) => {
-        const { name, expression: expression2, should_cache: should_cache2 } = style_directive;
+        const { name, expression: expression2, should_cache: should_cache2, important } = style_directive;
         const snippet = expression2.manipulate(block);
         let cached_snippet;
         if (should_cache2) {
-          cached_snippet = block.get_unique_name(`style_${name.replace(/-/g, "_")}`);
+          cached_snippet = block.get_unique_name(`style_${name.replace(regex_minus_signs, "_")}`);
           block.add_variable(cached_snippet, snippet);
         }
-        const updater = b`@set_style(${this.var}, "${name}", ${should_cache2 ? cached_snippet : snippet}, false)`;
+        const updater = b`@set_style(${this.var}, "${name}", ${should_cache2 ? cached_snippet : snippet}, ${important ? 1 : null})`;
         block.chunks.hydrate.push(updater);
         const dependencies = expression2.dynamic_dependencies();
         if (has_spread) {
@@ -20278,6 +29656,8 @@ ${this.frame}`;
       }
     }
   };
+  var regex_backticks = /`/g;
+  var regex_dollar_signs = /\$/g;
   function to_html(wrappers2, block, literal2, state, can_use_raw_text) {
     wrappers2.forEach((wrapper) => {
       if (wrapper instanceof TextWrapper) {
@@ -20285,7 +29665,7 @@ ${this.frame}`;
           state.quasi.value.raw += " ";
         const parent = wrapper.node.parent;
         const raw = parent && (parent.name === "script" || parent.name === "style" || can_use_raw_text);
-        state.quasi.value.raw += (raw ? wrapper.data : escape_html(wrapper.data)).replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$/g, "\\$");
+        state.quasi.value.raw += (raw ? wrapper.data : escape_html(wrapper.data)).replace(regex_backslashes, "\\\\").replace(regex_backticks, "\\`").replace(regex_dollar_signs, "\\$");
       } else if (wrapper instanceof MustacheTagWrapper || wrapper instanceof RawMustacheTagWrapper) {
         literal2.quasis.push(state.quasi);
         literal2.expressions.push(wrapper.node.expression.manipulate(block));
@@ -20310,7 +29690,7 @@ ${this.frame}`;
           state.quasi.value.raw += ">";
           if (wrapper.node.name === "pre") {
             const first = wrapper.fragment.nodes[0];
-            if (first && first.node.type === "Text" && start_newline.test(first.node.data)) {
+            if (first && first.node.type === "Text" && regex_starts_with_newline.test(first.node.data)) {
               state.quasi.value.raw += "\n";
             }
           }
@@ -20318,7 +29698,7 @@ ${this.frame}`;
             const value_attribute = wrapper.attributes.find((attr) => attr.node.name === "value");
             if (value_attribute) {
               const first = value_attribute.node.chunks[0];
-              if (first && first.type === "Text" && start_newline.test(first.data)) {
+              if (first && first.type === "Text" && regex_starts_with_newline.test(first.data)) {
                 state.quasi.value.raw += "\n";
               }
               to_html_for_attr_value(value_attribute, block, literal2, state);
@@ -20356,7 +29736,7 @@ ${this.frame}`;
       let nodes;
       if (this.renderer.options.hydratable && this.fragment.nodes.length) {
         nodes = block.get_unique_name("head_nodes");
-        block.chunks.claim.push(b`const ${nodes} = @query_selector_all('[data-svelte="${this.node.id}"]', @_document.head);`);
+        block.chunks.claim.push(b`const ${nodes} = @head_selector('${this.node.id}', @_document.head);`);
       }
       this.fragment.render(block, x`@_document.head`, nodes);
       if (nodes && this.renderer.options.hydratable) {
@@ -21043,6 +30423,7 @@ ${this.frame}`;
     }
     return node2;
   }
+  var regex_invalid_variable_identifier_characters$3 = /[^a-zA-Z_$]/g;
   var InlineComponentWrapper = class extends Wrapper {
     constructor(renderer, block, parent, node2, strip_whitespace, next_sibling) {
       super(renderer, block, parent, node2);
@@ -21126,7 +30507,9 @@ ${this.frame}`;
         }
       }
       const has_css_custom_properties = this.node.css_custom_properties.length > 0;
-      const css_custom_properties_wrapper = has_css_custom_properties ? block.get_unique_name("div") : null;
+      const is_svg_namespace = this.node.namespace === namespaces.svg;
+      const css_custom_properties_wrapper_element = is_svg_namespace ? "g" : "div";
+      const css_custom_properties_wrapper = has_css_custom_properties ? block.get_unique_name(css_custom_properties_wrapper_element) : null;
       if (has_css_custom_properties) {
         block.add_variable(css_custom_properties_wrapper);
       }
@@ -21312,10 +30695,17 @@ ${this.frame}`;
           snippet = x`@once(${snippet})`;
         return b`${name}.$on("${handler.name}", ${snippet});`;
       });
+      const mount_target = has_css_custom_properties ? css_custom_properties_wrapper : parent_node || "#target";
+      const mount_anchor = has_css_custom_properties ? "null" : parent_node ? "null" : "#anchor";
+      const to_claim = parent_nodes && this.renderer.options.hydratable;
+      let claim_nodes = parent_nodes;
       if (this.node.name === "svelte:component") {
         const switch_value = block.get_unique_name("switch_value");
         const switch_props = block.get_unique_name("switch_props");
         const snippet = this.node.expression.manipulate(block);
+        if (has_css_custom_properties) {
+          this.set_css_custom_properties(block, css_custom_properties_wrapper, css_custom_properties_wrapper_element, is_svg_namespace);
+        }
         block.chunks.init.push(b`
 				var ${switch_value} = ${snippet};
 
@@ -21327,28 +30717,30 @@ ${this.frame}`;
 				}
 
 				if (${switch_value}) {
-					${name} = new ${switch_value}(${switch_props}(#ctx));
+					${name} = @construct_svelte_component(${switch_value}, ${switch_props}(#ctx));
 
 					${munged_bindings}
 					${munged_handlers}
 				}
 			`);
         block.chunks.create.push(b`if (${name}) @create_component(${name}.$$.fragment);`);
-        if (parent_nodes && this.renderer.options.hydratable) {
-          block.chunks.claim.push(b`if (${name}) @claim_component(${name}.$$.fragment, ${parent_nodes});`);
+        if (css_custom_properties_wrapper)
+          this.create_css_custom_properties_wrapper_mount_chunk(block, parent_node, css_custom_properties_wrapper);
+        block.chunks.mount.push(b`if (${name}) @mount_component(${name}, ${mount_target}, ${mount_anchor});`);
+        if (to_claim) {
+          if (css_custom_properties_wrapper)
+            claim_nodes = this.create_css_custom_properties_wrapper_claim_chunk(block, claim_nodes, css_custom_properties_wrapper, css_custom_properties_wrapper_element, is_svg_namespace);
+          block.chunks.claim.push(b`if (${name}) @claim_component(${name}.$$.fragment, ${claim_nodes});`);
         }
-        block.chunks.mount.push(b`
-				if (${name}) {
-					@mount_component(${name}, ${parent_node || "#target"}, ${parent_node ? "null" : "#anchor"});
-				}
-			`);
-        const anchor = this.get_or_create_anchor(block, parent_node, parent_nodes);
-        const update_mount_node = this.get_update_mount_node(anchor);
         if (updates.length) {
           block.chunks.update.push(b`
 					${updates}
 				`);
         }
+        const tmp_anchor = this.get_or_create_anchor(block, parent_node, parent_nodes);
+        const anchor = has_css_custom_properties ? "null" : tmp_anchor;
+        const update_mount_node = has_css_custom_properties ? css_custom_properties_wrapper : this.get_update_mount_node(tmp_anchor);
+        const update_insert = css_custom_properties_wrapper && (tmp_anchor.name !== "null" ? b`@insert(${tmp_anchor}.parentNode, ${css_custom_properties_wrapper}, ${tmp_anchor});` : b`@insert(${parent_node}, ${css_custom_properties_wrapper}, ${tmp_anchor});`);
         block.chunks.update.push(b`
 				if (${switch_value} !== (${switch_value} = ${snippet})) {
 					if (${name}) {
@@ -21356,12 +30748,14 @@ ${this.frame}`;
 						const old_component = ${name};
 						@transition_out(old_component.$$.fragment, 1, 0, () => {
 							@destroy_component(old_component, 1);
+							${has_css_custom_properties ? b`@detach(${update_mount_node})` : null}
 						});
 						@check_outros();
 					}
 
 					if (${switch_value}) {
-						${name} = new ${switch_value}(${switch_props}(#ctx));
+						${update_insert}
+						${name} = @construct_svelte_component(${switch_value}, ${switch_props}(#ctx));
 
 						${munged_bindings}
 						${munged_handlers}
@@ -21393,54 +30787,16 @@ ${this.frame}`;
 				${munged_handlers}
 			`);
         if (has_css_custom_properties) {
-          block.chunks.create.push(b`${css_custom_properties_wrapper} = @element("div");`);
-          block.chunks.hydrate.push(b`@set_style(${css_custom_properties_wrapper}, "display", "contents");`);
-          this.node.css_custom_properties.forEach((attr) => {
-            const dependencies = attr.get_dependencies();
-            const should_cache2 = attr.should_cache();
-            const last = should_cache2 && block.get_unique_name(`${attr.name.replace(/[^a-zA-Z_$]/g, "_")}_last`);
-            if (should_cache2)
-              block.add_variable(last);
-            const value2 = attr.get_value(block);
-            const init = should_cache2 ? x`${last} = ${value2}` : value2;
-            block.chunks.hydrate.push(b`@set_style(${css_custom_properties_wrapper}, "${attr.name}", ${init});`);
-            if (dependencies.length > 0) {
-              let condition = block.renderer.dirty(dependencies);
-              if (should_cache2)
-                condition = x`${condition} && (${last} !== (${last} = ${value2}))`;
-              block.chunks.update.push(b`
-							if (${condition}) {
-								@set_style(${css_custom_properties_wrapper}, "${attr.name}", ${should_cache2 ? last : value2});
-							}
-						`);
-            }
-          });
+          this.set_css_custom_properties(block, css_custom_properties_wrapper, css_custom_properties_wrapper_element, is_svg_namespace);
         }
         block.chunks.create.push(b`@create_component(${name}.$$.fragment);`);
-        if (parent_nodes && this.renderer.options.hydratable) {
-          let nodes = parent_nodes;
-          if (has_css_custom_properties) {
-            nodes = block.get_unique_name(`${css_custom_properties_wrapper.name}_nodes`);
-            block.chunks.claim.push(b`
-						${css_custom_properties_wrapper} = @claim_element(${parent_nodes}, "DIV", { style: true })
-						var ${nodes} = @children(${css_custom_properties_wrapper});
-					`);
-          }
-          block.chunks.claim.push(b`@claim_component(${name}.$$.fragment, ${nodes});`);
-        }
-        if (has_css_custom_properties) {
-          if (parent_node) {
-            block.chunks.mount.push(b`@append(${parent_node}, ${css_custom_properties_wrapper})`);
-            if (is_head(parent_node)) {
-              block.chunks.destroy.push(b`@detach(${css_custom_properties_wrapper});`);
-            }
-          } else {
-            block.chunks.mount.push(b`@insert(#target, ${css_custom_properties_wrapper}, #anchor);`);
-            block.chunks.destroy.push(b`if (detaching) @detach(${css_custom_properties_wrapper});`);
-          }
-          block.chunks.mount.push(b`@mount_component(${name}, ${css_custom_properties_wrapper}, null);`);
-        } else {
-          block.chunks.mount.push(b`@mount_component(${name}, ${parent_node || "#target"}, ${parent_node ? "null" : "#anchor"});`);
+        if (css_custom_properties_wrapper)
+          this.create_css_custom_properties_wrapper_mount_chunk(block, parent_node, css_custom_properties_wrapper);
+        block.chunks.mount.push(b`@mount_component(${name}, ${mount_target}, ${mount_anchor});`);
+        if (to_claim) {
+          if (css_custom_properties_wrapper)
+            claim_nodes = this.create_css_custom_properties_wrapper_claim_chunk(block, claim_nodes, css_custom_properties_wrapper, css_custom_properties_wrapper_element, is_svg_namespace);
+          block.chunks.claim.push(b`@claim_component(${name}.$$.fragment, ${claim_nodes});`);
         }
         block.chunks.intro.push(b`
 				@transition_in(${name}.$$.fragment, #local);
@@ -21456,6 +30812,52 @@ ${this.frame}`;
 			`);
         block.chunks.outro.push(b`@transition_out(${name}.$$.fragment, #local);`);
       }
+    }
+    create_css_custom_properties_wrapper_mount_chunk(block, parent_node, css_custom_properties_wrapper) {
+      if (parent_node) {
+        block.chunks.mount.push(b`@append(${parent_node}, ${css_custom_properties_wrapper})`);
+        if (is_head(parent_node)) {
+          block.chunks.destroy.push(b`@detach(${css_custom_properties_wrapper});`);
+        }
+      } else {
+        block.chunks.mount.push(b`@insert(#target, ${css_custom_properties_wrapper}, #anchor);`);
+        block.chunks.destroy.push(b`if (detaching && ${this.var}) @detach(${css_custom_properties_wrapper});`);
+      }
+    }
+    create_css_custom_properties_wrapper_claim_chunk(block, parent_nodes, css_custom_properties_wrapper, css_custom_properties_wrapper_element, is_svg_namespace) {
+      const nodes = block.get_unique_name(`${css_custom_properties_wrapper.name}_nodes`);
+      const claim_element = is_svg_namespace ? x`@claim_svg_element` : x`@claim_element`;
+      block.chunks.claim.push(b`
+			${css_custom_properties_wrapper} = ${claim_element}(${parent_nodes}, "${css_custom_properties_wrapper_element.toUpperCase()}", { style: true })
+			var ${nodes} = @children(${css_custom_properties_wrapper});
+		`);
+      return nodes;
+    }
+    set_css_custom_properties(block, css_custom_properties_wrapper, css_custom_properties_wrapper_element, is_svg_namespace) {
+      const element = is_svg_namespace ? x`@svg_element` : x`@element`;
+      block.chunks.create.push(b`${css_custom_properties_wrapper} = ${element}("${css_custom_properties_wrapper_element}");`);
+      if (!is_svg_namespace)
+        block.chunks.hydrate.push(b`@set_style(${css_custom_properties_wrapper}, "display", "contents");`);
+      this.node.css_custom_properties.forEach((attr) => {
+        const dependencies = attr.get_dependencies();
+        const should_cache2 = attr.should_cache();
+        const last = should_cache2 && block.get_unique_name(`${attr.name.replace(regex_invalid_variable_identifier_characters$3, "_")}_last`);
+        if (should_cache2)
+          block.add_variable(last);
+        const value2 = attr.get_value(block);
+        const init = should_cache2 ? x`${last} = ${value2}` : value2;
+        block.chunks.hydrate.push(b`@set_style(${css_custom_properties_wrapper}, "${attr.name}", ${init});`);
+        if (dependencies.length > 0) {
+          let condition = block.renderer.dirty(dependencies);
+          if (should_cache2)
+            condition = x`${condition} && (${last} !== (${last} = ${value2}))`;
+          block.chunks.update.push(b`
+					if (${condition}) {
+						@set_style(${css_custom_properties_wrapper}, "${attr.name}", ${should_cache2 ? last : value2});
+					}
+				`);
+        }
+      });
     }
   };
   function get_slot_data(values, block = null) {
@@ -21870,7 +31272,7 @@ ${this.frame}`;
         if (child.type === "Text") {
           let { data: data2 } = child;
           if (this.nodes.length === 0) {
-            const should_trim = next_sibling ? next_sibling.node.type === "Text" && /^\s/.test(next_sibling.node.data) && trimmable_at(child, next_sibling) : !child.has_ancestor("EachBlock");
+            const should_trim = next_sibling ? next_sibling.node.type === "Text" && regex_starts_with_whitespace.test(next_sibling.node.data) && trimmable_at(child, next_sibling) : !child.has_ancestor("EachBlock");
             if (should_trim && !child.keep_space()) {
               data2 = trim_end(data2);
               if (!data2)
@@ -22590,7 +31992,7 @@ Did you specify these with the most recent transformation maps first?`);
 		` : null;
     const accessors = [];
     const not_equal = component.component_options.immutable ? x`@not_equal` : x`@safe_not_equal`;
-    let dev_props_check;
+    let missing_props_check;
     let inject_state;
     let capture_state;
     let props_inject;
@@ -22677,13 +32079,13 @@ Did you specify these with the most recent transformation maps first?`);
     if (component.compile_options.dev) {
       const expected = props.filter((prop) => prop.writable && !prop.initialised);
       if (expected.length) {
-        dev_props_check = b`
-				const { ctx: #ctx } = this.$$;
-				const props = ${options.customElement ? x`this.attributes` : x`options.props || {}`};
-				${expected.map((prop) => b`
-				if (${renderer.reference(prop.name)} === undefined && !('${prop.export_name}' in props)) {
-					@_console.warn("<${component.tag}> was created without expected prop '${prop.export_name}'");
-				}`)}
+        missing_props_check = b`
+				$$self.$$.on_mount.push(function () {
+					${expected.map((prop) => b`
+					if (${prop.name} === undefined && !(('${prop.export_name}' in $$props) || $$self.$$.bound[$$self.$$.props['${prop.export_name}']])) {
+						@_console.warn("<${component.tag}> was created without expected prop '${prop.export_name}'");
+					}`)}
+				});
 			`;
       }
       const capturable_vars = component.vars.filter((v) => !v.internal && !v.global && !v.name.startsWith("$$"));
@@ -22855,6 +32257,7 @@ Did you specify these with the most recent transformation maps first?`);
 
 				${instance_javascript}
 
+				${missing_props_check}
 				${unknown_props_check}
 
 				${renderer.binding_groups.size > 0 && b`const $$binding_groups = [${[...renderer.binding_groups.keys()].map((_) => x`[]`)}];`}
@@ -22903,12 +32306,10 @@ Did you specify these with the most recent transformation maps first?`);
 				constructor(options) {
 					super();
 
-					${css.code && b`this.shadowRoot.innerHTML = \`<style>${css.code.replace(/\\/g, "\\\\")}${css_sourcemap_enabled && options.dev ? `
+					${css.code && b`this.shadowRoot.innerHTML = \`<style>${css.code.replace(regex_backslashes, "\\\\")}${css_sourcemap_enabled && options.dev ? `
 /*# sourceMappingURL=${css.map.toUrl()} */` : ""}</style>\`;`}
 
 					@init(this, { target: this.shadowRoot, props: ${init_props}, customElement: true }, ${definition}, ${has_create_fragment ? "create_fragment" : "null"}, ${not_equal}, ${prop_indexes}, null, ${dirty});
-
-					${dev_props_check}
 
 					if (options) {
 						if (options.target) {
@@ -22963,8 +32364,6 @@ Did you specify these with the most recent transformation maps first?`);
 					super(${options.dev && "options"});
 					@init(this, options, ${definition}, ${has_create_fragment ? "create_fragment" : "null"}, ${not_equal}, ${prop_indexes}, ${optional_parameters});
 					${options.dev && b`@dispatch_dev("SvelteRegisterComponent", { component: this, tagName: "${name.name}", options, id: create_fragment.name });`}
-
-					${dev_props_check}
 				}
 			}
 		`[0];
@@ -23051,7 +32450,7 @@ Did you specify these with the most recent transformation maps first?`);
     if (attribute.chunks.length === 0)
       return x`""`;
     return attribute.chunks.map((chunk) => {
-      return chunk.type === "Text" ? string_literal(chunk.data.replace(/"/g, "&quot;")) : x`@escape(${chunk.node}, true)`;
+      return chunk.type === "Text" ? string_literal(chunk.data.replace(regex_double_quotes, "&quot;")) : x`@escape(${chunk.node}, true)`;
     }).reduce((lhs, rhs) => x`${lhs} + ${rhs}`);
   }
   function get_attribute_expression(attribute) {
@@ -23060,32 +32459,6 @@ Did you specify these with the most recent transformation maps first?`);
     }
     return get_attribute_value(attribute);
   }
-  var boolean_attributes = /* @__PURE__ */ new Set([
-    "allowfullscreen",
-    "allowpaymentrequest",
-    "async",
-    "autofocus",
-    "autoplay",
-    "checked",
-    "controls",
-    "default",
-    "defer",
-    "disabled",
-    "formnovalidate",
-    "hidden",
-    "ismap",
-    "loop",
-    "multiple",
-    "muted",
-    "nomodule",
-    "novalidate",
-    "open",
-    "playsinline",
-    "readonly",
-    "required",
-    "reversed",
-    "selected"
-  ]);
   function remove_whitespace_children(children, next) {
     const nodes = [];
     let last_child;
@@ -23098,7 +32471,7 @@ Did you specify these with the most recent transformation maps first?`);
         }
         let { data: data2 } = child;
         if (nodes.length === 0) {
-          const should_trim = next ? next.type === "Text" && /^\s/.test(next.data) && trimmable_at$1(child, next) : !child.has_ancestor("EachBlock");
+          const should_trim = next ? next.type === "Text" && regex_starts_with_whitespace.test(next.data) && trimmable_at$1(child, next) : !child.has_ancestor("EachBlock");
           if (should_trim && !child.keep_space()) {
             data2 = trim_end(data2);
             if (!data2)
@@ -23151,7 +32524,10 @@ Did you specify these with the most recent transformation maps first?`);
     }
     const class_expression = class_expression_list.length > 0 && class_expression_list.reduce((lhs, rhs) => x`${lhs} + ' ' + ${rhs}`);
     const style_expression_list = node2.styles.map((style_directive) => {
-      const { name, expression: { node: expression2 } } = style_directive;
+      let { name, important, expression: { node: expression2 } } = style_directive;
+      if (important) {
+        expression2 = x`${expression2} + ' !important'`;
+      }
       return p`"${name}": ${expression2}`;
     });
     const style_expression = style_expression_list.length > 0 && x`{ ${style_expression_list} }`;
@@ -23241,9 +32617,6 @@ Did you specify these with the most recent transformation maps first?`);
         renderer.add_expression(x`@add_attribute("${name}", ${snippet}, ${boolean_attributes.has(name) ? 1 : 0})`);
       }
     });
-    if (options.hydratable && options.head_id) {
-      renderer.add_string(` data-svelte="${options.head_id}"`);
-    }
     renderer.add_string(">");
     if (node_contents !== void 0) {
       if (contenteditable) {
@@ -23256,7 +32629,7 @@ Did you specify these with the most recent transformation maps first?`);
           const value_attribute = node2.attributes.find(({ name }) => name === "value");
           if (value_attribute) {
             const first = value_attribute.chunks[0];
-            if (first && first.type === "Text" && start_newline.test(first.data)) {
+            if (first && first.type === "Text" && regex_starts_with_newline.test(first.data)) {
               renderer.add_string("\n");
             }
           }
@@ -23267,7 +32640,7 @@ Did you specify these with the most recent transformation maps first?`);
     } else {
       if (node2.name === "pre") {
         const first = children[0];
-        if (first && first.type === "Text" && start_newline.test(first.data)) {
+        if (first && first.type === "Text" && regex_starts_with_newline.test(first.data)) {
           renderer.add_string("\n");
         }
       }
@@ -23313,7 +32686,13 @@ Did you specify these with the most recent transformation maps first?`);
     renderer.push();
     renderer.render(node2.children, head_options);
     const result = renderer.pop();
-    renderer.add_expression(x`$$result.head += ${result}, ""`);
+    let expression2 = result;
+    if (options.hydratable) {
+      const start_comment = `HEAD_${node2.id}_START`;
+      const end_comment = `HEAD_${node2.id}_END`;
+      expression2 = x`'<!-- ${start_comment} -->' + ${expression2} + '<!-- ${end_comment} -->'`;
+    }
+    renderer.add_expression(x`$$result.head += ${expression2}, ""`);
   }
   function HtmlTag(node2, renderer, options) {
     if (options.hydratable)
@@ -23392,17 +32771,27 @@ Did you specify these with the most recent transformation maps first?`);
 		${slot_fns}
 	}`;
     if (node2.css_custom_properties.length > 0) {
-      renderer.add_string('<div style="display: contents;');
-      node2.css_custom_properties.forEach((attr) => {
-        renderer.add_string(` ${attr.name}:`);
+      if (node2.namespace === namespaces.svg) {
+        renderer.add_string('<g style="');
+      } else {
+        renderer.add_string('<div style="display: contents; ');
+      }
+      node2.css_custom_properties.forEach((attr, index) => {
+        renderer.add_string(`${attr.name}:`);
         renderer.add_expression(get_attribute_value(attr));
         renderer.add_string(";");
+        if (index < node2.css_custom_properties.length - 1)
+          renderer.add_string(" ");
       });
       renderer.add_string('">');
     }
     renderer.add_expression(x`@validate_component(${expression2}, "${node2.name}").$$render($$result, ${props}, ${bindings}, ${slots})`);
     if (node2.css_custom_properties.length > 0) {
-      renderer.add_string("</div>");
+      if (node2.namespace === namespaces.svg) {
+        renderer.add_string("</g>");
+      } else {
+        renderer.add_string("</div>");
+      }
     }
   }
   function KeyBlock$1(node2, renderer, options) {
@@ -23733,12 +33122,847 @@ Did you specify these with the most recent transformation maps first?`);
       const node2 = nodes[end - 1];
       if (node2.type !== "Text")
         break;
-      node2.data = node2.data.replace(/\s+$/, "");
+      node2.data = node2.data.trimRight();
       if (node2.data)
         break;
     }
     return nodes.slice(start, end);
   }
+  var globals = /* @__PURE__ */ new Set([
+    "AbortController",
+    "AbortSignal",
+    "AbstractRange",
+    "ActiveXObject",
+    "AggregateError",
+    "AnalyserNode",
+    "Animation",
+    "AnimationEffect",
+    "AnimationEvent",
+    "AnimationPlaybackEvent",
+    "AnimationTimeline",
+    "Array",
+    "ArrayBuffer",
+    "Atomics",
+    "Attr",
+    "Audio",
+    "AudioBuffer",
+    "AudioBufferSourceNode",
+    "AudioContext",
+    "AudioDestinationNode",
+    "AudioListener",
+    "AudioNode",
+    "AudioParam",
+    "AudioParamMap",
+    "AudioProcessingEvent",
+    "AudioScheduledSourceNode",
+    "AudioWorklet",
+    "AudioWorkletNode",
+    "AuthenticatorAssertionResponse",
+    "AuthenticatorAttestationResponse",
+    "AuthenticatorResponse",
+    "BarProp",
+    "BaseAudioContext",
+    "BeforeUnloadEvent",
+    "BigInt",
+    "BigInt64Array",
+    "BigUint64Array",
+    "BiquadFilterNode",
+    "Blob",
+    "BlobEvent",
+    "Boolean",
+    "BroadcastChannel",
+    "ByteLengthQueuingStrategy",
+    "CDATASection",
+    "CSS",
+    "CSSAnimation",
+    "CSSConditionRule",
+    "CSSCounterStyleRule",
+    "CSSFontFaceRule",
+    "CSSGroupingRule",
+    "CSSImportRule",
+    "CSSKeyframeRule",
+    "CSSKeyframesRule",
+    "CSSMediaRule",
+    "CSSNamespaceRule",
+    "CSSPageRule",
+    "CSSRule",
+    "CSSRuleList",
+    "CSSStyleDeclaration",
+    "CSSStyleRule",
+    "CSSStyleSheet",
+    "CSSSupportsRule",
+    "CSSTransition",
+    "Cache",
+    "CacheStorage",
+    "CanvasCaptureMediaStreamTrack",
+    "CanvasGradient",
+    "CanvasPattern",
+    "CanvasRenderingContext2D",
+    "ChannelMergerNode",
+    "ChannelSplitterNode",
+    "CharacterData",
+    "ClientRect",
+    "Clipboard",
+    "ClipboardEvent",
+    "ClipboardItem",
+    "CloseEvent",
+    "Comment",
+    "CompositionEvent",
+    "ConstantSourceNode",
+    "ConvolverNode",
+    "CountQueuingStrategy",
+    "Credential",
+    "CredentialsContainer",
+    "Crypto",
+    "CryptoKey",
+    "CustomElementRegistry",
+    "CustomEvent",
+    "DOMException",
+    "DOMImplementation",
+    "DOMMatrix",
+    "DOMMatrixReadOnly",
+    "DOMParser",
+    "DOMPoint",
+    "DOMPointReadOnly",
+    "DOMQuad",
+    "DOMRect",
+    "DOMRectList",
+    "DOMRectReadOnly",
+    "DOMStringList",
+    "DOMStringMap",
+    "DOMTokenList",
+    "DataTransfer",
+    "DataTransferItem",
+    "DataTransferItemList",
+    "DataView",
+    "Date",
+    "DelayNode",
+    "DeviceMotionEvent",
+    "DeviceOrientationEvent",
+    "Document",
+    "DocumentFragment",
+    "DocumentTimeline",
+    "DocumentType",
+    "DragEvent",
+    "DynamicsCompressorNode",
+    "Element",
+    "ElementInternals",
+    "Enumerator",
+    "Error",
+    "ErrorEvent",
+    "EvalError",
+    "Event",
+    "EventCounts",
+    "EventSource",
+    "EventTarget",
+    "External",
+    "File",
+    "FileList",
+    "FileReader",
+    "FileSystem",
+    "FileSystemDirectoryEntry",
+    "FileSystemDirectoryHandle",
+    "FileSystemDirectoryReader",
+    "FileSystemEntry",
+    "FileSystemFileEntry",
+    "FileSystemFileHandle",
+    "FileSystemHandle",
+    "FinalizationRegistry",
+    "Float32Array",
+    "Float64Array",
+    "FocusEvent",
+    "FontFace",
+    "FontFaceSet",
+    "FontFaceSetLoadEvent",
+    "FormData",
+    "FormDataEvent",
+    "Function",
+    "GainNode",
+    "Gamepad",
+    "GamepadButton",
+    "GamepadEvent",
+    "GamepadHapticActuator",
+    "Geolocation",
+    "GeolocationCoordinates",
+    "GeolocationPosition",
+    "GeolocationPositionError",
+    "HTMLAllCollection",
+    "HTMLAnchorElement",
+    "HTMLAreaElement",
+    "HTMLAudioElement",
+    "HTMLBRElement",
+    "HTMLBaseElement",
+    "HTMLBodyElement",
+    "HTMLButtonElement",
+    "HTMLCanvasElement",
+    "HTMLCollection",
+    "HTMLDListElement",
+    "HTMLDataElement",
+    "HTMLDataListElement",
+    "HTMLDetailsElement",
+    "HTMLDialogElement",
+    "HTMLDirectoryElement",
+    "HTMLDivElement",
+    "HTMLDocument",
+    "HTMLElement",
+    "HTMLEmbedElement",
+    "HTMLFieldSetElement",
+    "HTMLFontElement",
+    "HTMLFormControlsCollection",
+    "HTMLFormElement",
+    "HTMLFrameElement",
+    "HTMLFrameSetElement",
+    "HTMLHRElement",
+    "HTMLHeadElement",
+    "HTMLHeadingElement",
+    "HTMLHtmlElement",
+    "HTMLIFrameElement",
+    "HTMLImageElement",
+    "HTMLInputElement",
+    "HTMLLIElement",
+    "HTMLLabelElement",
+    "HTMLLegendElement",
+    "HTMLLinkElement",
+    "HTMLMapElement",
+    "HTMLMarqueeElement",
+    "HTMLMediaElement",
+    "HTMLMenuElement",
+    "HTMLMetaElement",
+    "HTMLMeterElement",
+    "HTMLModElement",
+    "HTMLOListElement",
+    "HTMLObjectElement",
+    "HTMLOptGroupElement",
+    "HTMLOptionElement",
+    "HTMLOptionsCollection",
+    "HTMLOutputElement",
+    "HTMLParagraphElement",
+    "HTMLParamElement",
+    "HTMLPictureElement",
+    "HTMLPreElement",
+    "HTMLProgressElement",
+    "HTMLQuoteElement",
+    "HTMLScriptElement",
+    "HTMLSelectElement",
+    "HTMLSlotElement",
+    "HTMLSourceElement",
+    "HTMLSpanElement",
+    "HTMLStyleElement",
+    "HTMLTableCaptionElement",
+    "HTMLTableCellElement",
+    "HTMLTableColElement",
+    "HTMLTableElement",
+    "HTMLTableRowElement",
+    "HTMLTableSectionElement",
+    "HTMLTemplateElement",
+    "HTMLTextAreaElement",
+    "HTMLTimeElement",
+    "HTMLTitleElement",
+    "HTMLTrackElement",
+    "HTMLUListElement",
+    "HTMLUnknownElement",
+    "HTMLVideoElement",
+    "HashChangeEvent",
+    "Headers",
+    "History",
+    "IDBCursor",
+    "IDBCursorWithValue",
+    "IDBDatabase",
+    "IDBFactory",
+    "IDBIndex",
+    "IDBKeyRange",
+    "IDBObjectStore",
+    "IDBOpenDBRequest",
+    "IDBRequest",
+    "IDBTransaction",
+    "IDBVersionChangeEvent",
+    "IIRFilterNode",
+    "IdleDeadline",
+    "Image",
+    "ImageBitmap",
+    "ImageBitmapRenderingContext",
+    "ImageData",
+    "Infinity",
+    "InputDeviceInfo",
+    "InputEvent",
+    "Int16Array",
+    "Int32Array",
+    "Int8Array",
+    "InternalError",
+    "IntersectionObserver",
+    "IntersectionObserverEntry",
+    "Intl",
+    "JSON",
+    "KeyboardEvent",
+    "KeyframeEffect",
+    "Location",
+    "Lock",
+    "LockManager",
+    "Map",
+    "Math",
+    "MathMLElement",
+    "MediaCapabilities",
+    "MediaDeviceInfo",
+    "MediaDevices",
+    "MediaElementAudioSourceNode",
+    "MediaEncryptedEvent",
+    "MediaError",
+    "MediaKeyMessageEvent",
+    "MediaKeySession",
+    "MediaKeyStatusMap",
+    "MediaKeySystemAccess",
+    "MediaKeys",
+    "MediaList",
+    "MediaMetadata",
+    "MediaQueryList",
+    "MediaQueryListEvent",
+    "MediaRecorder",
+    "MediaRecorderErrorEvent",
+    "MediaSession",
+    "MediaSource",
+    "MediaStream",
+    "MediaStreamAudioDestinationNode",
+    "MediaStreamAudioSourceNode",
+    "MediaStreamTrack",
+    "MediaStreamTrackEvent",
+    "MessageChannel",
+    "MessageEvent",
+    "MessagePort",
+    "MimeType",
+    "MimeTypeArray",
+    "MouseEvent",
+    "MutationEvent",
+    "MutationObserver",
+    "MutationRecord",
+    "NaN",
+    "NamedNodeMap",
+    "NavigationPreloadManager",
+    "Navigator",
+    "NetworkInformation",
+    "Node",
+    "NodeFilter",
+    "NodeIterator",
+    "NodeList",
+    "Notification",
+    "Number",
+    "Object",
+    "OfflineAudioCompletionEvent",
+    "OfflineAudioContext",
+    "Option",
+    "OscillatorNode",
+    "OverconstrainedError",
+    "PageTransitionEvent",
+    "PannerNode",
+    "Path2D",
+    "PaymentAddress",
+    "PaymentMethodChangeEvent",
+    "PaymentRequest",
+    "PaymentRequestUpdateEvent",
+    "PaymentResponse",
+    "Performance",
+    "PerformanceEntry",
+    "PerformanceEventTiming",
+    "PerformanceMark",
+    "PerformanceMeasure",
+    "PerformanceNavigation",
+    "PerformanceNavigationTiming",
+    "PerformanceObserver",
+    "PerformanceObserverEntryList",
+    "PerformancePaintTiming",
+    "PerformanceResourceTiming",
+    "PerformanceServerTiming",
+    "PerformanceTiming",
+    "PeriodicWave",
+    "PermissionStatus",
+    "Permissions",
+    "PictureInPictureWindow",
+    "Plugin",
+    "PluginArray",
+    "PointerEvent",
+    "PopStateEvent",
+    "ProcessingInstruction",
+    "ProgressEvent",
+    "Promise",
+    "PromiseRejectionEvent",
+    "Proxy",
+    "PublicKeyCredential",
+    "PushManager",
+    "PushSubscription",
+    "PushSubscriptionOptions",
+    "RTCCertificate",
+    "RTCDTMFSender",
+    "RTCDTMFToneChangeEvent",
+    "RTCDataChannel",
+    "RTCDataChannelEvent",
+    "RTCDtlsTransport",
+    "RTCEncodedAudioFrame",
+    "RTCEncodedVideoFrame",
+    "RTCError",
+    "RTCErrorEvent",
+    "RTCIceCandidate",
+    "RTCIceTransport",
+    "RTCPeerConnection",
+    "RTCPeerConnectionIceErrorEvent",
+    "RTCPeerConnectionIceEvent",
+    "RTCRtpReceiver",
+    "RTCRtpSender",
+    "RTCRtpTransceiver",
+    "RTCSctpTransport",
+    "RTCSessionDescription",
+    "RTCStatsReport",
+    "RTCTrackEvent",
+    "RadioNodeList",
+    "Range",
+    "RangeError",
+    "ReadableByteStreamController",
+    "ReadableStream",
+    "ReadableStreamBYOBReader",
+    "ReadableStreamBYOBRequest",
+    "ReadableStreamDefaultController",
+    "ReadableStreamDefaultReader",
+    "ReferenceError",
+    "Reflect",
+    "RegExp",
+    "RemotePlayback",
+    "Request",
+    "ResizeObserver",
+    "ResizeObserverEntry",
+    "ResizeObserverSize",
+    "Response",
+    "SVGAElement",
+    "SVGAngle",
+    "SVGAnimateElement",
+    "SVGAnimateMotionElement",
+    "SVGAnimateTransformElement",
+    "SVGAnimatedAngle",
+    "SVGAnimatedBoolean",
+    "SVGAnimatedEnumeration",
+    "SVGAnimatedInteger",
+    "SVGAnimatedLength",
+    "SVGAnimatedLengthList",
+    "SVGAnimatedNumber",
+    "SVGAnimatedNumberList",
+    "SVGAnimatedPreserveAspectRatio",
+    "SVGAnimatedRect",
+    "SVGAnimatedString",
+    "SVGAnimatedTransformList",
+    "SVGAnimationElement",
+    "SVGCircleElement",
+    "SVGClipPathElement",
+    "SVGComponentTransferFunctionElement",
+    "SVGCursorElement",
+    "SVGDefsElement",
+    "SVGDescElement",
+    "SVGElement",
+    "SVGEllipseElement",
+    "SVGFEBlendElement",
+    "SVGFEColorMatrixElement",
+    "SVGFEComponentTransferElement",
+    "SVGFECompositeElement",
+    "SVGFEConvolveMatrixElement",
+    "SVGFEDiffuseLightingElement",
+    "SVGFEDisplacementMapElement",
+    "SVGFEDistantLightElement",
+    "SVGFEDropShadowElement",
+    "SVGFEFloodElement",
+    "SVGFEFuncAElement",
+    "SVGFEFuncBElement",
+    "SVGFEFuncGElement",
+    "SVGFEFuncRElement",
+    "SVGFEGaussianBlurElement",
+    "SVGFEImageElement",
+    "SVGFEMergeElement",
+    "SVGFEMergeNodeElement",
+    "SVGFEMorphologyElement",
+    "SVGFEOffsetElement",
+    "SVGFEPointLightElement",
+    "SVGFESpecularLightingElement",
+    "SVGFESpotLightElement",
+    "SVGFETileElement",
+    "SVGFETurbulenceElement",
+    "SVGFilterElement",
+    "SVGForeignObjectElement",
+    "SVGGElement",
+    "SVGGeometryElement",
+    "SVGGradientElement",
+    "SVGGraphicsElement",
+    "SVGImageElement",
+    "SVGLength",
+    "SVGLengthList",
+    "SVGLineElement",
+    "SVGLinearGradientElement",
+    "SVGMPathElement",
+    "SVGMarkerElement",
+    "SVGMaskElement",
+    "SVGMatrix",
+    "SVGMetadataElement",
+    "SVGNumber",
+    "SVGNumberList",
+    "SVGPathElement",
+    "SVGPatternElement",
+    "SVGPoint",
+    "SVGPointList",
+    "SVGPolygonElement",
+    "SVGPolylineElement",
+    "SVGPreserveAspectRatio",
+    "SVGRadialGradientElement",
+    "SVGRect",
+    "SVGRectElement",
+    "SVGSVGElement",
+    "SVGScriptElement",
+    "SVGSetElement",
+    "SVGStopElement",
+    "SVGStringList",
+    "SVGStyleElement",
+    "SVGSwitchElement",
+    "SVGSymbolElement",
+    "SVGTSpanElement",
+    "SVGTextContentElement",
+    "SVGTextElement",
+    "SVGTextPathElement",
+    "SVGTextPositioningElement",
+    "SVGTitleElement",
+    "SVGTransform",
+    "SVGTransformList",
+    "SVGUnitTypes",
+    "SVGUseElement",
+    "SVGViewElement",
+    "SafeArray",
+    "Screen",
+    "ScreenOrientation",
+    "ScriptProcessorNode",
+    "SecurityPolicyViolationEvent",
+    "Selection",
+    "ServiceWorker",
+    "ServiceWorkerContainer",
+    "ServiceWorkerRegistration",
+    "Set",
+    "ShadowRoot",
+    "SharedArrayBuffer",
+    "SharedWorker",
+    "SourceBuffer",
+    "SourceBufferList",
+    "SpeechRecognitionAlternative",
+    "SpeechRecognitionErrorEvent",
+    "SpeechRecognitionResult",
+    "SpeechRecognitionResultList",
+    "SpeechSynthesis",
+    "SpeechSynthesisErrorEvent",
+    "SpeechSynthesisEvent",
+    "SpeechSynthesisUtterance",
+    "SpeechSynthesisVoice",
+    "StaticRange",
+    "StereoPannerNode",
+    "Storage",
+    "StorageEvent",
+    "StorageManager",
+    "String",
+    "StyleMedia",
+    "StyleSheet",
+    "StyleSheetList",
+    "SubmitEvent",
+    "SubtleCrypto",
+    "Symbol",
+    "SyntaxError",
+    "Text",
+    "TextDecoder",
+    "TextDecoderStream",
+    "TextEncoder",
+    "TextEncoderStream",
+    "TextMetrics",
+    "TextTrack",
+    "TextTrackCue",
+    "TextTrackCueList",
+    "TextTrackList",
+    "TimeRanges",
+    "Touch",
+    "TouchEvent",
+    "TouchList",
+    "TrackEvent",
+    "TransformStream",
+    "TransformStreamDefaultController",
+    "TransitionEvent",
+    "TreeWalker",
+    "TypeError",
+    "UIEvent",
+    "URIError",
+    "URL",
+    "URLSearchParams",
+    "Uint16Array",
+    "Uint32Array",
+    "Uint8Array",
+    "Uint8ClampedArray",
+    "VBArray",
+    "VTTCue",
+    "VTTRegion",
+    "ValidityState",
+    "VarDate",
+    "VideoColorSpace",
+    "VideoPlaybackQuality",
+    "VisualViewport",
+    "WSH",
+    "WScript",
+    "WaveShaperNode",
+    "WeakMap",
+    "WeakRef",
+    "WeakSet",
+    "WebAssembly",
+    "WebGL2RenderingContext",
+    "WebGLActiveInfo",
+    "WebGLBuffer",
+    "WebGLContextEvent",
+    "WebGLFramebuffer",
+    "WebGLProgram",
+    "WebGLQuery",
+    "WebGLRenderbuffer",
+    "WebGLRenderingContext",
+    "WebGLSampler",
+    "WebGLShader",
+    "WebGLShaderPrecisionFormat",
+    "WebGLSync",
+    "WebGLTexture",
+    "WebGLTransformFeedback",
+    "WebGLUniformLocation",
+    "WebGLVertexArrayObject",
+    "WebKitCSSMatrix",
+    "WebSocket",
+    "WheelEvent",
+    "Window",
+    "Worker",
+    "Worklet",
+    "WritableStream",
+    "WritableStreamDefaultController",
+    "WritableStreamDefaultWriter",
+    "XMLDocument",
+    "XMLHttpRequest",
+    "XMLHttpRequestEventTarget",
+    "XMLHttpRequestUpload",
+    "XMLSerializer",
+    "XPathEvaluator",
+    "XPathExpression",
+    "XPathResult",
+    "XSLTProcessor",
+    "addEventListener",
+    "alert",
+    "atob",
+    "blur",
+    "btoa",
+    "caches",
+    "cancelAnimationFrame",
+    "cancelIdleCallback",
+    "captureEvents",
+    "clearInterval",
+    "clearTimeout",
+    "clientInformation",
+    "close",
+    "closed",
+    "confirm",
+    "console",
+    "createImageBitmap",
+    "crossOriginIsolated",
+    "crypto",
+    "customElements",
+    "decodeURI",
+    "decodeURIComponent",
+    "devicePixelRatio",
+    "dispatchEvent",
+    "document",
+    "encodeURI",
+    "encodeURIComponent",
+    "escape",
+    "eval",
+    "event",
+    "external",
+    "fetch",
+    "focus",
+    "frameElement",
+    "frames",
+    "getComputedStyle",
+    "getSelection",
+    "global",
+    "globalThis",
+    "history",
+    "importScripts",
+    "indexedDB",
+    "innerHeight",
+    "innerWidth",
+    "isFinite",
+    "isNaN",
+    "isSecureContext",
+    "length",
+    "localStorage",
+    "location",
+    "locationbar",
+    "matchMedia",
+    "menubar",
+    "moveBy",
+    "moveTo",
+    "name",
+    "navigator",
+    "onabort",
+    "onafterprint",
+    "onanimationcancel",
+    "onanimationend",
+    "onanimationiteration",
+    "onanimationstart",
+    "onauxclick",
+    "onbeforeprint",
+    "onbeforeunload",
+    "onblur",
+    "oncanplay",
+    "oncanplaythrough",
+    "onchange",
+    "onclick",
+    "onclose",
+    "oncontextmenu",
+    "oncuechange",
+    "ondblclick",
+    "ondevicemotion",
+    "ondeviceorientation",
+    "ondrag",
+    "ondragend",
+    "ondragenter",
+    "ondragleave",
+    "ondragover",
+    "ondragstart",
+    "ondrop",
+    "ondurationchange",
+    "onemptied",
+    "onended",
+    "onerror",
+    "onfocus",
+    "onformdata",
+    "ongamepadconnected",
+    "ongamepaddisconnected",
+    "ongotpointercapture",
+    "onhashchange",
+    "oninput",
+    "oninvalid",
+    "onkeydown",
+    "onkeypress",
+    "onkeyup",
+    "onlanguagechange",
+    "onload",
+    "onloadeddata",
+    "onloadedmetadata",
+    "onloadstart",
+    "onlostpointercapture",
+    "onmessage",
+    "onmessageerror",
+    "onmousedown",
+    "onmouseenter",
+    "onmouseleave",
+    "onmousemove",
+    "onmouseout",
+    "onmouseover",
+    "onmouseup",
+    "onoffline",
+    "ononline",
+    "onorientationchange",
+    "onpagehide",
+    "onpageshow",
+    "onpause",
+    "onplay",
+    "onplaying",
+    "onpointercancel",
+    "onpointerdown",
+    "onpointerenter",
+    "onpointerleave",
+    "onpointermove",
+    "onpointerout",
+    "onpointerover",
+    "onpointerup",
+    "onpopstate",
+    "onprogress",
+    "onratechange",
+    "onrejectionhandled",
+    "onreset",
+    "onresize",
+    "onscroll",
+    "onsecuritypolicyviolation",
+    "onseeked",
+    "onseeking",
+    "onselect",
+    "onselectionchange",
+    "onselectstart",
+    "onslotchange",
+    "onstalled",
+    "onstorage",
+    "onsubmit",
+    "onsuspend",
+    "ontimeupdate",
+    "ontoggle",
+    "ontouchcancel",
+    "ontouchend",
+    "ontouchmove",
+    "ontouchstart",
+    "ontransitioncancel",
+    "ontransitionend",
+    "ontransitionrun",
+    "ontransitionstart",
+    "onunhandledrejection",
+    "onunload",
+    "onvolumechange",
+    "onwaiting",
+    "onwebkitanimationend",
+    "onwebkitanimationiteration",
+    "onwebkitanimationstart",
+    "onwebkittransitionend",
+    "onwheel",
+    "open",
+    "opener",
+    "orientation",
+    "origin",
+    "outerHeight",
+    "outerWidth",
+    "pageXOffset",
+    "pageYOffset",
+    "parent",
+    "parseFloat",
+    "parseInt",
+    "performance",
+    "personalbar",
+    "postMessage",
+    "print",
+    "process",
+    "prompt",
+    "queueMicrotask",
+    "releaseEvents",
+    "removeEventListener",
+    "reportError",
+    "requestAnimationFrame",
+    "requestIdleCallback",
+    "resizeBy",
+    "resizeTo",
+    "screen",
+    "screenLeft",
+    "screenTop",
+    "screenX",
+    "screenY",
+    "scroll",
+    "scrollBy",
+    "scrollTo",
+    "scrollX",
+    "scrollY",
+    "scrollbars",
+    "self",
+    "sessionStorage",
+    "setInterval",
+    "setTimeout",
+    "speechSynthesis",
+    "status",
+    "statusbar",
+    "stop",
+    "structuredClone",
+    "toString",
+    "toolbar",
+    "top",
+    "undefined",
+    "unescape",
+    "visualViewport",
+    "webkitURL",
+    "window"
+  ]);
   var wrappers$1 = { esm, cjs };
   function create_module(program, format, name, banner, sveltePath = "svelte", helpers, globals2, imports, module_exports, exports_from) {
     const internal_path = `${sveltePath}/internal`;
@@ -24293,7 +34517,7 @@ Did you specify these with the most recent transformation maps first?`);
     return this.indentStr === null ? "	" : this.indentStr;
   };
   MagicString.prototype.indent = function indent(indentStr, options) {
-    var pattern2 = /^[^\r\n]/gm;
+    var pattern = /^[^\r\n]/gm;
     if (isObject(indentStr)) {
       options = indentStr;
       indentStr = void 0;
@@ -24320,14 +34544,14 @@ Did you specify these with the most recent transformation maps first?`);
       shouldIndentNextCharacter = true;
       return match;
     };
-    this.intro = this.intro.replace(pattern2, replacer);
+    this.intro = this.intro.replace(pattern, replacer);
     var charIndex = 0;
     var chunk = this.firstChunk;
     while (chunk) {
       var end = chunk.end;
       if (chunk.edited) {
         if (!isExcluded[charIndex]) {
-          chunk.content = chunk.content.replace(pattern2, replacer);
+          chunk.content = chunk.content.replace(pattern, replacer);
           if (chunk.content.length) {
             shouldIndentNextCharacter = chunk.content[chunk.content.length - 1] === "\n";
           }
@@ -24356,7 +34580,7 @@ Did you specify these with the most recent transformation maps first?`);
       charIndex = chunk.end;
       chunk = chunk.next;
     }
-    this.outro = this.outro.replace(pattern2, replacer);
+    this.outro = this.outro.replace(pattern, replacer);
     return this;
   };
   MagicString.prototype.insert = function insert() {
@@ -24787,6 +35011,7 @@ Did you specify these with the most recent transformation maps first?`);
     ["details", /* @__PURE__ */ new Set(["open"])],
     ["dialog", /* @__PURE__ */ new Set(["open"])]
   ]);
+  var regex_is_single_css_selector = /[^\\],(?!([^([]+[^\\]|[^([\\])[)\]])/;
   var Selector$1 = class {
     constructor(node2, stylesheet) {
       this.node = node2;
@@ -24881,6 +35106,7 @@ Did you specify these with the most recent transformation maps first?`);
         }
       }
       this.validate_global_with_multiple_selectors(component);
+      this.validate_invalid_combinator_without_selector(component);
     }
     validate_global_with_multiple_selectors(component) {
       if (this.blocks.length === 1 && this.blocks[0].selectors.length === 1) {
@@ -24889,10 +35115,21 @@ Did you specify these with the most recent transformation maps first?`);
       for (const block of this.blocks) {
         for (const selector2 of block.selectors) {
           if (selector2.type === "PseudoClassSelector" && selector2.name === "global") {
-            if (/[^\\],(?!([^([]+[^\\]|[^([\\])[)\]])/.test(selector2.children[0].value)) {
+            if (regex_is_single_css_selector.test(selector2.children[0].value)) {
               component.error(selector2, compiler_errors.css_invalid_global_selector);
             }
           }
+        }
+      }
+    }
+    validate_invalid_combinator_without_selector(component) {
+      for (let i = 0; i < this.blocks.length; i++) {
+        const block = this.blocks[i];
+        if (block.combinator && block.selectors.length === 0) {
+          component.error(this.node, compiler_errors.css_invalid_selector(component.source.slice(this.node.start, this.node.end)));
+        }
+        if (!block.combinator && block.selectors.length === 0) {
+          component.error(this.node, compiler_errors.css_invalid_selector(component.source.slice(this.node.start, this.node.end)));
         }
       }
     }
@@ -24978,11 +35215,12 @@ Did you specify these with the most recent transformation maps first?`);
     to_encapsulate.push({ node: node2, block });
     return true;
   }
+  var regex_backslash_and_following_character = /\\(.)/g;
   function block_might_apply_to_node(block, node2) {
     let i = block.selectors.length;
     while (i--) {
       const selector2 = block.selectors[i];
-      const name = typeof selector2.name === "string" && selector2.name.replace(/\\(.)/g, "$1");
+      const name = typeof selector2.name === "string" && selector2.name.replace(regex_backslash_and_following_character, "$1");
       if (selector2.type === "PseudoClassSelector" && (name === "host" || name === "root")) {
         return BlockAppliesToNode.NotPossible;
       }
@@ -25003,7 +35241,7 @@ Did you specify these with the most recent transformation maps first?`);
           return BlockAppliesToNode.NotPossible;
         }
       } else if (selector2.type === "TypeSelector") {
-        if (node2.name.toLowerCase() !== name.toLowerCase() && name !== "*")
+        if (node2.name.toLowerCase() !== name.toLowerCase() && name !== "*" && !node2.is_dynamic_element)
           return BlockAppliesToNode.NotPossible;
       } else {
         return BlockAppliesToNode.UnknownSelectorType;
@@ -25068,7 +35306,7 @@ Did you specify these with the most recent transformation maps first?`);
         const start_with_space = [];
         const remaining = [];
         current_possible_values.forEach((current_possible_value) => {
-          if (/^\s/.test(current_possible_value)) {
+          if (regex_starts_with_whitespace.test(current_possible_value)) {
             start_with_space.push(current_possible_value);
           } else {
             remaining.push(current_possible_value);
@@ -25086,7 +35324,7 @@ Did you specify these with the most recent transformation maps first?`);
           });
           prev_values = combined;
           start_with_space.forEach((value2) => {
-            if (/\s$/.test(value2)) {
+            if (regex_ends_with_whitespace.test(value2)) {
               possible_values.add(value2);
             } else {
               prev_values.push(value2);
@@ -25099,7 +35337,7 @@ Did you specify these with the most recent transformation maps first?`);
         }
       }
       current_possible_values.forEach((current_possible_value) => {
-        if (/\s$/.test(current_possible_value)) {
+        if (regex_ends_with_whitespace.test(current_possible_value)) {
           possible_values.add(current_possible_value);
         } else {
           prev_values.push(current_possible_value);
@@ -25296,8 +35534,9 @@ Did you specify these with the most recent transformation maps first?`);
     });
     return blocks;
   }
+  var regex_css_browser_prefix = /^-((webkit)|(moz)|(o)|(ms))-/;
   function remove_css_prefix(name) {
-    return name.replace(/^-((webkit)|(moz)|(o)|(ms))-/, "");
+    return name.replace(regex_css_browser_prefix, "");
   }
   var is_keyframes_node = (node2) => remove_css_prefix(node2.name) === "keyframes";
   var at_rule_has_declaration = ({ block }) => block && block.children && block.children.find((node2) => node2.type === "Declaration");
@@ -25393,10 +35632,10 @@ Did you specify these with the most recent transformation maps first?`);
         return;
       const c2 = this.node.start + this.node.property.length;
       const first = this.node.value.children ? this.node.value.children[0] : this.node.value;
-      if (first.type === "Raw" && /^\s+$/.test(first.value))
+      if (first.type === "Raw" && regex_only_whitespaces.test(first.value))
         return;
       let start = first.start;
-      while (/\s/.test(code.original[start]))
+      while (regex_whitespace.test(code.original[start]))
         start += 1;
       if (start - c2 > 1) {
         code.overwrite(c2, start, ":");
@@ -25684,7 +35923,7 @@ Did you specify these with the most recent transformation maps first?`);
       this.children = map_children(component, this, scope2, info.children);
     }
   };
-  var internal_exports = /* @__PURE__ */ new Set(["HtmlTag", "HtmlTagHydration", "SvelteComponent", "SvelteComponentDev", "SvelteComponentTyped", "SvelteElement", "action_destroyer", "add_attribute", "add_classes", "add_flush_callback", "add_location", "add_render_callback", "add_resize_listener", "add_styles", "add_transform", "afterUpdate", "append", "append_dev", "append_empty_stylesheet", "append_hydration", "append_hydration_dev", "append_styles", "assign", "attr", "attr_dev", "attribute_to_object", "beforeUpdate", "bind", "binding_callbacks", "blank_object", "bubble", "check_outros", "children", "claim_component", "claim_element", "claim_html_tag", "claim_space", "claim_svg_element", "claim_text", "clear_loops", "component_subscribe", "compute_rest_props", "compute_slots", "createEventDispatcher", "create_animation", "create_bidirectional_transition", "create_component", "create_in_transition", "create_out_transition", "create_slot", "create_ssr_component", "current_component", "custom_event", "dataset_dev", "debug", "destroy_block", "destroy_component", "destroy_each", "detach", "detach_after_dev", "detach_before_dev", "detach_between_dev", "detach_dev", "dirty_components", "dispatch_dev", "each", "element", "element_is", "empty", "end_hydrating", "escape", "escape_attribute_value", "escape_object", "exclude_internal_props", "fix_and_destroy_block", "fix_and_outro_and_destroy_block", "fix_position", "flush", "getAllContexts", "getContext", "get_all_dirty_from_scope", "get_binding_group_value", "get_current_component", "get_custom_elements_slots", "get_root_for_style", "get_slot_changes", "get_spread_object", "get_spread_update", "get_store_value", "globals", "group_outros", "handle_promise", "hasContext", "has_prop", "identity", "init", "insert", "insert_dev", "insert_hydration", "insert_hydration_dev", "intros", "invalid_attribute_name_character", "is_client", "is_crossorigin", "is_empty", "is_function", "is_promise", "is_void", "listen", "listen_dev", "loop", "loop_guard", "merge_ssr_styles", "missing_component", "mount_component", "noop", "not_equal", "now", "null_to_empty", "object_without_properties", "onDestroy", "onMount", "once", "outro_and_destroy_block", "prevent_default", "prop_dev", "query_selector_all", "raf", "run", "run_all", "safe_not_equal", "schedule_update", "select_multiple_value", "select_option", "select_options", "select_value", "self", "setContext", "set_attributes", "set_current_component", "set_custom_element_data", "set_data", "set_data_dev", "set_input_type", "set_input_value", "set_now", "set_raf", "set_store_value", "set_style", "set_svg_attributes", "space", "spread", "src_url_equal", "start_hydrating", "stop_propagation", "subscribe", "svg_element", "text", "tick", "time_ranges_to_array", "to_number", "toggle_class", "transition_in", "transition_out", "trusted", "update_await_block_branch", "update_keyed_each", "update_slot", "update_slot_base", "validate_component", "validate_dynamic_element", "validate_each_argument", "validate_each_keys", "validate_slots", "validate_store", "validate_void_dynamic_element", "xlink_attr"]);
+  var internal_exports = /* @__PURE__ */ new Set(["HtmlTag", "HtmlTagHydration", "SvelteComponent", "SvelteComponentDev", "SvelteComponentTyped", "SvelteElement", "action_destroyer", "add_attribute", "add_classes", "add_flush_callback", "add_location", "add_render_callback", "add_resize_listener", "add_styles", "add_transform", "afterUpdate", "append", "append_dev", "append_empty_stylesheet", "append_hydration", "append_hydration_dev", "append_styles", "assign", "attr", "attr_dev", "attribute_to_object", "beforeUpdate", "bind", "binding_callbacks", "blank_object", "bubble", "check_outros", "children", "claim_component", "claim_element", "claim_html_tag", "claim_space", "claim_svg_element", "claim_text", "clear_loops", "component_subscribe", "compute_rest_props", "compute_slots", "construct_svelte_component", "construct_svelte_component_dev", "createEventDispatcher", "create_animation", "create_bidirectional_transition", "create_component", "create_in_transition", "create_out_transition", "create_slot", "create_ssr_component", "current_component", "custom_event", "dataset_dev", "debug", "destroy_block", "destroy_component", "destroy_each", "detach", "detach_after_dev", "detach_before_dev", "detach_between_dev", "detach_dev", "dirty_components", "dispatch_dev", "each", "element", "element_is", "empty", "end_hydrating", "escape", "escape_attribute_value", "escape_object", "exclude_internal_props", "fix_and_destroy_block", "fix_and_outro_and_destroy_block", "fix_position", "flush", "getAllContexts", "getContext", "get_all_dirty_from_scope", "get_binding_group_value", "get_current_component", "get_custom_elements_slots", "get_root_for_style", "get_slot_changes", "get_spread_object", "get_spread_update", "get_store_value", "globals", "group_outros", "handle_promise", "hasContext", "has_prop", "head_selector", "identity", "init", "insert", "insert_dev", "insert_hydration", "insert_hydration_dev", "intros", "invalid_attribute_name_character", "is_client", "is_crossorigin", "is_empty", "is_function", "is_promise", "is_void", "listen", "listen_dev", "loop", "loop_guard", "merge_ssr_styles", "missing_component", "mount_component", "noop", "not_equal", "now", "null_to_empty", "object_without_properties", "onDestroy", "onMount", "once", "outro_and_destroy_block", "prevent_default", "prop_dev", "query_selector_all", "raf", "run", "run_all", "safe_not_equal", "schedule_update", "select_multiple_value", "select_option", "select_options", "select_value", "self", "setContext", "set_attributes", "set_current_component", "set_custom_element_data", "set_custom_element_data_map", "set_data", "set_data_dev", "set_input_type", "set_input_value", "set_now", "set_raf", "set_store_value", "set_style", "set_svg_attributes", "space", "spread", "src_url_equal", "start_hydrating", "stop_propagation", "subscribe", "svg_element", "text", "tick", "time_ranges_to_array", "to_number", "toggle_class", "transition_in", "transition_out", "trusted", "update_await_block_branch", "update_keyed_each", "update_slot", "update_slot_base", "validate_component", "validate_dynamic_element", "validate_each_argument", "validate_each_keys", "validate_slots", "validate_store", "validate_void_dynamic_element", "xlink_attr"]);
   function is_used_as_reference(node2, parent) {
     if (!is_reference(node2, parent)) {
       return false;
@@ -25705,6 +35944,9 @@ Did you specify these with the most recent transformation maps first?`);
         return true;
     }
   }
+  var regex_leading_directory_separator = /^[/\\]/;
+  var regex_starts_with_term_export = /^Export/;
+  var regex_contains_term_function = /Function/;
   var Component = class {
     constructor(ast, source, name, compile_options, stats, warnings) {
       this.ignore_stack = [];
@@ -25742,7 +35984,7 @@ Did you specify these with the most recent transformation maps first?`);
         instance: ast.instance,
         module: ast.module
       });
-      this.file = compile_options.filename && (typeof process !== "undefined" ? compile_options.filename.replace(process.cwd(), "").replace(/^[/\\]/, "") : compile_options.filename);
+      this.file = compile_options.filename && (typeof process !== "undefined" ? compile_options.filename.replace(process.cwd(), "").replace(regex_leading_directory_separator, "") : compile_options.filename);
       this.locate = getLocator(this.source, { offsetLine: 1 });
       this.stylesheet = new Stylesheet({
         source,
@@ -25841,7 +36083,7 @@ Did you specify these with the most recent transformation maps first?`);
       if (result) {
         const { compile_options, name } = this;
         const { format = "esm" } = compile_options;
-        const banner = `${this.file ? `${this.file} ` : ""}generated by Svelte v${"3.49.0"}`;
+        const banner = `${this.file ? `${this.file} ` : ""}generated by Svelte v${"3.52.0"}`;
         const program = { type: "Program", body: result.js };
         walk(program, {
           enter: (node2, parent, key) => {
@@ -26121,7 +36363,7 @@ ${frame}`
           this.extract_imports(node2);
           body.splice(i, 1);
         }
-        if (/^Export/.test(node2.type)) {
+        if (regex_starts_with_term_export.test(node2.type)) {
           const replacement = this.extract_exports(node2, true);
           if (replacement) {
             body[i] = replacement;
@@ -26247,12 +36489,41 @@ ${frame}`
           if (map.has(node2)) {
             scope2 = map.get(node2);
           }
+          let deep = false;
+          let names2;
+          if (node2.type === "AssignmentExpression") {
+            deep = node2.left.type === "MemberExpression";
+            names2 = deep ? [get_object(node2.left).name] : extract_names(node2.left);
+          } else if (node2.type === "UpdateExpression") {
+            deep = node2.argument.type === "MemberExpression";
+            const { name } = get_object(node2.argument);
+            names2 = [name];
+          }
+          if (names2) {
+            names2.forEach((name) => {
+              let current_scope = scope2;
+              let declaration;
+              while (current_scope) {
+                if (current_scope.declarations.has(name)) {
+                  declaration = current_scope.declarations.get(name);
+                  break;
+                }
+                current_scope = current_scope.parent;
+              }
+              if (declaration && declaration.kind === "const" && !deep) {
+                component.error(node2, {
+                  code: "assignment-to-const",
+                  message: "You are assigning to a const"
+                });
+              }
+            });
+          }
           if (node2.type === "ImportDeclaration") {
             component.extract_imports(node2);
             remove2(parent, prop, index);
             return this.skip();
           }
-          if (/^Export/.test(node2.type)) {
+          if (regex_starts_with_term_export.test(node2.type)) {
             const replacement = component.extract_exports(node2);
             if (replacement) {
               this.replace(replacement);
@@ -26347,7 +36618,7 @@ ${frame}`
             this.warn_if_undefined(name, object, null);
           }
           if (name[1] !== "$" && scope2.has(name.slice(1)) && scope2.find_owner(name.slice(1)) !== this.instance_scope) {
-            if (!(/Function/.test(parent.type) && prop === "params" || parent.type === "VariableDeclarator" && prop === "id")) {
+            if (!(regex_contains_term_function.test(parent.type) && prop === "params" || parent.type === "VariableDeclarator" && prop === "id")) {
               return this.error(node2, compiler_errors.contextual_store);
             }
           }
@@ -26385,7 +36656,7 @@ ${frame}`
       let scope2 = instance_scope;
       walk(this.ast.instance.content, {
         enter(node2) {
-          if (/Function/.test(node2.type)) {
+          if (regex_contains_term_function.test(node2.type)) {
             return this.skip();
           }
           if (map.has(node2)) {
@@ -26761,6 +37032,7 @@ ${frame}`
       this.ignores = this.ignore_stack[this.ignore_stack.length - 1];
     }
   };
+  var regex_valid_tag_name = /^[a-zA-Z][a-zA-Z0-9]*-[a-zA-Z0-9-]+$/;
   function process_component_options(component, nodes) {
     const component_options = {
       immutable: component.compile_options.immutable || false,
@@ -26794,7 +37066,7 @@ ${frame}`
               if (typeof tag2 !== "string" && tag2 !== null) {
                 return component.error(attribute, compiler_errors.invalid_tag_attribute);
               }
-              if (tag2 && !/^[a-zA-Z][a-zA-Z0-9]*-[a-zA-Z0-9-]+$/.test(tag2)) {
+              if (tag2 && !regex_valid_tag_name.test(tag2)) {
                 return component.error(attribute, compiler_errors.invalid_tag_property);
               }
               if (tag2 && !component.compile_options.customElement) {
@@ -26858,6 +37130,10 @@ ${frame}`
       return null;
     return compile_options.outputFilename ? get_relative_path(compile_options.outputFilename, compile_options.filename) : get_basename(compile_options.filename);
   }
+  var regex_percentage_characters = /%/g;
+  var regex_file_ending = /\.[^.]+$/;
+  var regex_repeated_invalid_variable_identifier_characters = /[^a-zA-Z_$0-9]+/g;
+  var regex_starts_with_digit = /^(\d)/;
   function get_name_from_filename(filename) {
     if (!filename)
       return null;
@@ -26869,7 +37145,7 @@ ${frame}`
         parts[parts.length - 1] += index_match[1];
       }
     }
-    const base = parts.pop().replace(/%/g, "u").replace(/\.[^.]+$/, "").replace(/[^a-zA-Z_$0-9]+/g, "_").replace(/^_/, "").replace(/_$/, "").replace(/^(\d)/, "_$1");
+    const base = parts.pop().replace(regex_percentage_characters, "u").replace(regex_file_ending, "").replace(regex_repeated_invalid_variable_identifier_characters, "_").replace(regex_starts_with_underscore, "").replace(regex_ends_with_underscore, "").replace(regex_starts_with_digit, "_$1");
     if (!base) {
       throw new Error(`Could not derive component name from file ${filename}`);
     }
@@ -26901,6 +37177,8 @@ ${frame}`
     "preserveWhitespace",
     "cssHash"
   ];
+  var regex_valid_identifier = /^[a-zA-Z_$][a-zA-Z_$0-9]*$/;
+  var regex_starts_with_lowercase_character = /^[a-z]/;
   function validate_options(options, warnings) {
     const { name, filename, loopGuardTimeout, dev, namespace } = options;
     Object.keys(options).forEach((key) => {
@@ -26912,10 +37190,10 @@ ${frame}`
         throw new Error(message);
       }
     });
-    if (name && !/^[a-zA-Z_$][a-zA-Z_$0-9]*$/.test(name)) {
+    if (name && !regex_valid_identifier.test(name)) {
       throw new Error(`options.name must be a valid identifier (got '${name}')`);
     }
-    if (name && /^[a-z]/.test(name)) {
+    if (name && regex_starts_with_lowercase_character.test(name)) {
       const message = "options.name should be capitalised";
       warnings.push({
         code: "options-lowercase-name",

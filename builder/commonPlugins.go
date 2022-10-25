@@ -6,6 +6,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	esbuild "github.com/evanw/esbuild/pkg/api"
 	"github.com/mansoor-s/aviator/utils"
@@ -27,16 +28,18 @@ func createLayoutWrappedView(view *View) string {
 		importStatement := fmt.Sprintf(wrappedImportStatementFmt, layout.UniqueName, layout.RelPath)
 		importStatements = append(importStatements, importStatement)
 
-		startStr := `<` + layout.UniqueName + `>`
+		startStr := `<svelte:component this={` + layout.UniqueName + `} {...($$props || {})}>`
+		//startStr := `<` + layout.UniqueName + `>`
 		startTags = append(startTags, startStr)
 
-		endStr := `</` + layout.UniqueName + `>`
+		//endStr := `</` + layout.UniqueName + `>`
+		endStr := `</svelte:component>`
 		endTags = append([]string{endStr}, endTags...)
 	}
 	importStatement := fmt.Sprintf(wrappedImportStatementFmt, view.UniqueName, view.RelPath)
 	importStatements = append(importStatements, importStatement)
 
-	componentStr := `<svelte:component this={` + view.UniqueName + `}  {...($$props || {})}/>`
+	componentStr := `<svelte:component this={` + view.UniqueName + `} {...($$props || {})}/>`
 
 	wrappedComponentStr := strings.Join(startTags, "") +
 		componentStr +
@@ -55,14 +58,17 @@ func npmJsPathPlugin(workingDir string) esbuild.Plugin {
 			//handles imports that are JS files, but for some reason the import Path doesn't
 			//include the .js suffix
 			epb.OnResolve(
-				// What's going on in this regex:
-				// one or more  .'s
-				// one of either a / or \
-				// zero or more of anything followed by a /
-				// alpha-numerics and - and _ at the end
-				esbuild.OnResolveOptions{Filter: `\.+(\/\\)(.*\/)?[a-zA-Z0-9\-_]+$`},
+				//capture all relative path imports
+				esbuild.OnResolveOptions{Filter: `\.+(\/)`},
 				func(args esbuild.OnResolveArgs) (esbuild.OnResolveResult, error) {
 					var result esbuild.OnResolveResult
+
+					// return early if this isn't a node_module file
+					// TODO: edge-case if user names their own files with something
+					// containing node_module?
+					if !strings.Contains(args.Importer, "node_module") {
+						return result, nil
+					}
 
 					importedFilePath := args.Path
 
@@ -202,7 +208,7 @@ func wrappedComponentsPlugin(
 func svelteComponentsPlugin(
 	cache Cache,
 	workingDir string,
-	cssCache map[string]string,
+	cssCache *sync.Map,
 	compilerFunc SvelteCompilerFunc,
 ) esbuild.Plugin {
 	return esbuild.Plugin{
@@ -236,52 +242,67 @@ func svelteComponentsPlugin(
 			epb.OnLoad(
 				esbuild.OnLoadOptions{Filter: `.*`, Namespace: "svelte"},
 				func(args esbuild.OnLoadArgs) (result esbuild.OnLoadResult, err error) {
-					var contents *string
+					var jsContents *string
 
-					//caching is disabled until CSS generation can be integrated
-
-					//cachedContent := cache.GetContent(args.Path)
+					//cachedContent is a JSON serialized contents of both JS and CSS
+					cachedContent := cache.GetContent(args.Path)
 					//cache miss
-					//if cachedContent == nil {
-					rawCode, err := os.ReadFile(args.Path)
-					if err != nil {
-						return result, err
-					}
+					if cachedContent == nil {
+						rawCode, err := os.ReadFile(args.Path)
+						if err != nil {
+							return result, err
+						}
 
-					newPath := utils.PathPascalCase(filepath.Base(args.Path))
+						newPath := utils.PathPascalCase(filepath.Base(args.Path))
 
-					compiledCode, err := compilerFunc(newPath, rawCode)
-					if err != nil {
-						return result, err
-					}
-					//contents = &compiledCode.JSCode
+						compiledCode, err := compilerFunc(newPath, rawCode)
+						if err != nil {
+							return result, err
+						}
 
-					compiledContent := compiledCode.JSCode +
-						"\n//# sourceMappingURL=" +
-						compiledCode.JSSourceMap
+						compiledJSContent := compiledCode.JSCode +
+							"\n//# sourceMappingURL=" +
+							compiledCode.JSSourceMap
 
-					contents = &compiledContent
+						var compiledCssContent string
 
-					//cache CSS contents for bundling
-					if len(compiledCode.CSSCode) > 0 {
+						//add CSS contents for bundling
+						if len(compiledCode.CSSCode) > 0 {
+							cssCacheFileName := strings.Replace(args.Path, ".svelte", ".fake-svelte-css", -1)
+
+							compiledCssContent = compiledCode.CSSCode +
+								"/*# sourceMappingURL=" +
+								compiledCode.JSSourceMap +
+								" */"
+
+							cssCache.Store(cssCacheFileName, compiledCssContent)
+
+							//add the css as an import in the JS content so esbuild can bundle it
+							compiledJSContent += "\nimport \"" + cssCacheFileName + `";`
+						}
+
+						cacheContent, err := serializeCacheContent(&compiledJSContent, &compiledCssContent)
+						if err != nil {
+							return result, err
+						}
+
+						cache.AddCache(args.Path, cacheContent)
+
+						jsContents = &compiledJSContent
+					} else {
+						js, css, err := deserializeCacheContent(cachedContent)
+						if err != nil {
+							return result, err
+						}
+						jsContents = js
+
+						//add css to cssCache for css bundling
 						cssCacheFileName := strings.Replace(args.Path, ".svelte", ".fake-svelte-css", -1)
-
-						cssCache[cssCacheFileName] = compiledCode.CSSCode +
-							"/*# sourceMappingURL=" +
-							compiledCode.JSSourceMap +
-							" */"
-
-						//add the css as an import in the JS content so esbuild can bundle it
-						*contents += "\nimport \"" + cssCacheFileName + `";`
+						cssCache.Store(cssCacheFileName, *css)
 					}
-
-					//cache.AddCache(args.Path, &compiledContent)
-					//} else {
-					//	contents = cachedContent
-					//}
 
 					result.ResolveDir = workingDir
-					result.Contents = contents
+					result.Contents = jsContents
 					result.Loader = esbuild.LoaderTSX
 					return result, nil
 				},
@@ -302,12 +323,13 @@ func svelteComponentsPlugin(
 				esbuild.OnLoadOptions{Filter: `.*`, Namespace: "fakecss"},
 				func(args esbuild.OnLoadArgs) (result esbuild.OnLoadResult, err error) {
 
-					cssContents, ok := cssCache[args.Path]
+					cachedCssContents, ok := cssCache.Load(args.Path)
 					if !ok {
 						//return empty object if contents were not found in the cache
 						return result, nil
 					}
 
+					cssContents, _ := cachedCssContents.(string)
 					result.Contents = &cssContents
 					result.Loader = esbuild.LoaderCSS
 					result.ResolveDir = workingDir

@@ -330,7 +330,7 @@ func (c *componentTree) findComponents() error {
 		return err
 	}
 
-	var componentsInDir []string
+	componentsInDir := make(map[string]struct{})
 
 	for _, file := range files {
 		if file.IsDir() {
@@ -353,7 +353,8 @@ func (c *componentTree) findComponents() error {
 		if ok {
 			continue
 		}
-		componentsInDir = append(componentsInDir, componentName)
+
+		componentsInDir[componentName] = struct{}{}
 		c.Components[componentName] = &Component{
 			Name:       utils.PascalCase(componentName),
 			Path:       filepath.Join(c.path, file.Name()),
@@ -363,10 +364,7 @@ func (c *componentTree) findComponents() error {
 		}
 	}
 
-	//remove stale components that are no longer in the FS
-	/*for _, componentName := range componentsInDir {
-		delete(c.Layouts, componentName)
-	} */
+	//TODO: remove stale components that are no longer in the FS
 
 	return nil
 }
@@ -378,7 +376,7 @@ func (c *componentTree) findLayouts() error {
 		return err
 	}
 
-	var layoutsInDir []string
+	layoutsInDir := make(map[string]struct{})
 
 	for _, file := range files {
 		if file.IsDir() {
@@ -396,7 +394,8 @@ func (c *componentTree) findLayouts() error {
 			continue
 		}
 
-		layoutsInDir = append(layoutsInDir, layoutName)
+		layoutsInDir[layoutName] = struct{}{}
+
 		c.Layouts[layoutName] = &Layout{
 			Name:             layoutName,
 			Path:             filepath.Join(c.path, file.Name()),
@@ -407,15 +406,12 @@ func (c *componentTree) findLayouts() error {
 	}
 
 	//remove stale layouts that are no longer in the FS
+	// TODO:
 	/*for _, layout := range c.Layouts {
-		for _, layoutInDirName := range layoutsInDir {
-			if layoutInDirName != layoutName {
-				continue
-			}
-			//delete(c.Layouts, layoutName)
+		if _, ok := layoutsInDir[layout.Name]; !ok {
+			delete(c.Layouts, layout.Name)
 		}
-	}
-	*/
+	}*/
 
 	return nil
 }

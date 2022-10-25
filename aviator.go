@@ -4,9 +4,10 @@ import (
 	"context"
 	_ "embed"
 	"errors"
+	"text/template"
+
 	"github.com/mansoor-s/aviator/builder"
 	"github.com/mansoor-s/aviator/js"
-	"text/template"
 )
 
 //go:embed embedded_assets/svelte_compiler.js
@@ -35,12 +36,8 @@ func NewAviator(configs ...Option) *Aviator {
 	return a
 }
 
-//configCheck checks to see if the provided configs are sufficient to start
+// configCheck checks to see if the provided configs are sufficient to start
 func (a *Aviator) configCheck() error {
-	if len(a.outputPath) == 0 {
-		return errors.New("asset output path not specified")
-	}
-
 	if len(a.viewsPath) == 0 {
 		return errors.New("svelte views directory path not specified")
 	}
@@ -122,8 +119,8 @@ func (a *Aviator) Render(
 	return a.viewManager.Render(ctx, viewPath, props)
 }
 
-//GetStaticAsset returns a byte array contents of the static asset and a boolean
-//indicating whether the static asset was found
+// GetStaticAsset returns a byte array contents of the static asset and a boolean
+// indicating whether the static asset was found
 func (a *Aviator) GetStaticAsset(name string) ([]byte, string, bool) {
 	staticAsset, found := a.viewManager.GetStaticAsset(name)
 
