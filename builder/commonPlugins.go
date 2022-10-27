@@ -29,10 +29,8 @@ func createLayoutWrappedView(view *View) string {
 		importStatements = append(importStatements, importStatement)
 
 		startStr := `<svelte:component this={` + layout.UniqueName + `} {...($$props || {})}>`
-		//startStr := `<` + layout.UniqueName + `>`
 		startTags = append(startTags, startStr)
 
-		//endStr := `</` + layout.UniqueName + `>`
 		endStr := `</svelte:component>`
 		endTags = append([]string{endStr}, endTags...)
 	}
@@ -59,16 +57,9 @@ func npmJsPathPlugin(workingDir string) esbuild.Plugin {
 			//include the .js suffix
 			epb.OnResolve(
 				//capture all relative path imports
-				esbuild.OnResolveOptions{Filter: `\.+(\/)`},
+				esbuild.OnResolveOptions{Filter: `\.+(\/\\)(.*\/)?[a-zA-Z0-9\-_]+$`},
 				func(args esbuild.OnResolveArgs) (esbuild.OnResolveResult, error) {
 					var result esbuild.OnResolveResult
-
-					// return early if this isn't a node_module file
-					// TODO: edge-case if user names their own files with something
-					// containing node_module?
-					if !strings.Contains(args.Importer, "node_module") {
-						return result, nil
-					}
 
 					importedFilePath := args.Path
 
