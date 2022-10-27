@@ -3,7 +3,7 @@ module github.com/mansoor-s/aviator
 go 1.17
 
 require (
-	github.com/dop251/goja v0.0.0-20221024130056-0ad46a434ac5
+	github.com/dop251/goja v0.0.0-20221025165401-cb5011b539fe
 	github.com/dop251/goja_nodejs v0.0.0-20221009164102-3aa5028e57f6
 	github.com/evanw/esbuild v0.14.50
 	github.com/fsnotify/fsnotify v1.5.4
